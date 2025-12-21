@@ -13,6 +13,7 @@ import (
 	"fmt"
 
 	"github.com/go-json-experiment/json"
+	"github.com/go-json-experiment/json/jsontext"
 )
 
 var (
@@ -812,4 +813,175 @@ func UnmarshalGeometry(data []byte) (Geometry, error) {
 	default:
 		return nil, fmt.Errorf("%w: %q", errUnknownGeometryType, gt.Type)
 	}
+}
+
+// Feature represents a GeoJSON Feature with geometry, properties, and optional ID.
+type Feature struct {
+	ID         any
+	Geometry   Geometry
+	Properties map[string]any
+}
+
+// featureJSON is the GeoJSON representation of a Feature.
+type featureJSON struct {
+	Type       string          `json:"type"`
+	ID         any             `json:"id,omitzero"`
+	Geometry   jsontext.Value  `json:"geometry"`
+	Properties map[string]any  `json:"properties"`
+}
+
+// NewFeature creates a new Feature with the given geometry.
+func NewFeature(geometry Geometry) *Feature {
+	return &Feature{
+		Geometry:   geometry,
+		Properties: make(map[string]any),
+	}
+}
+
+// MarshalJSON implements json.Marshaler.
+func (f Feature) MarshalJSON() ([]byte, error) {
+	var geomData jsontext.Value
+
+	if f.Geometry != nil {
+		data, err := json.Marshal(f.Geometry)
+		if err != nil {
+			return nil, fmt.Errorf("marshaling geometry: %w", err)
+		}
+		geomData = data
+	} else {
+		geomData = []byte("null")
+	}
+
+	props := f.Properties
+	if props == nil {
+		props = make(map[string]any)
+	}
+
+	return json.Marshal(featureJSON{
+		Type:       "Feature",
+		ID:         f.ID,
+		Geometry:   geomData,
+		Properties: props,
+	})
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (f *Feature) UnmarshalJSON(data []byte) error {
+	var fj featureJSON
+
+	err := json.Unmarshal(data, &fj)
+	if err != nil {
+		return err
+	}
+
+	if fj.Type != "Feature" {
+		return fmt.Errorf("expected type Feature, got %q", fj.Type)
+	}
+
+	f.ID = fj.ID
+	f.Properties = fj.Properties
+
+	// Handle null geometry
+	if len(fj.Geometry) == 0 || string(fj.Geometry) == "null" {
+		f.Geometry = nil
+		return nil
+	}
+
+	geom, err := UnmarshalGeometry(fj.Geometry)
+	if err != nil {
+		return fmt.Errorf("unmarshaling geometry: %w", err)
+	}
+
+	f.Geometry = geom
+
+	return nil
+}
+
+// UnmarshalFeature parses GeoJSON and returns a Feature.
+func UnmarshalFeature(data []byte) (*Feature, error) {
+	var f Feature
+	if err := json.Unmarshal(data, &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
+// FeatureCollection represents a GeoJSON FeatureCollection.
+type FeatureCollection struct {
+	Features []*Feature
+}
+
+// featureCollectionJSON is the GeoJSON representation.
+type featureCollectionJSON struct {
+	Type     string           `json:"type"`
+	Features []jsontext.Value `json:"features"`
+}
+
+// NewFeatureCollection creates a new empty FeatureCollection.
+func NewFeatureCollection() *FeatureCollection {
+	return &FeatureCollection{
+		Features: make([]*Feature, 0),
+	}
+}
+
+// Append adds a feature to the collection and returns the collection for chaining.
+func (fc *FeatureCollection) Append(feature *Feature) *FeatureCollection {
+	fc.Features = append(fc.Features, feature)
+	return fc
+}
+
+// MarshalJSON implements json.Marshaler.
+func (fc FeatureCollection) MarshalJSON() ([]byte, error) {
+	features := make([]jsontext.Value, len(fc.Features))
+
+	for i, f := range fc.Features {
+		data, err := json.Marshal(f)
+		if err != nil {
+			return nil, fmt.Errorf("marshaling feature %d: %w", i, err)
+		}
+		features[i] = data
+	}
+
+	return json.Marshal(struct {
+		Type     string           `json:"type"`
+		Features []jsontext.Value `json:"features"`
+	}{
+		Type:     "FeatureCollection",
+		Features: features,
+	})
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (fc *FeatureCollection) UnmarshalJSON(data []byte) error {
+	var fcj featureCollectionJSON
+
+	err := json.Unmarshal(data, &fcj)
+	if err != nil {
+		return err
+	}
+
+	if fcj.Type != "FeatureCollection" {
+		return fmt.Errorf("expected type FeatureCollection, got %q", fcj.Type)
+	}
+
+	fc.Features = make([]*Feature, len(fcj.Features))
+
+	for i, rawFeature := range fcj.Features {
+		var f Feature
+		if err := json.Unmarshal(rawFeature, &f); err != nil {
+			return fmt.Errorf("unmarshaling feature %d: %w", i, err)
+		}
+		fc.Features[i] = &f
+	}
+
+	return nil
+}
+
+// UnmarshalFeatureCollection parses GeoJSON and returns a FeatureCollection.
+func UnmarshalFeatureCollection(data []byte) (*FeatureCollection, error) {
+	var fc FeatureCollection
+	if err := json.Unmarshal(data, &fc); err != nil {
+		return nil, err
+	}
+	return &fc, nil
 }
