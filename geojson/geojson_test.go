@@ -1917,3 +1917,347 @@ func TestUnmarshalGeometry_Errors(t *testing.T) {
 		})
 	}
 }
+
+// Tests for Feature
+
+func TestNewFeature(t *testing.T) {
+	point := Point{Lon: 10.5, Lat: 59.9}
+	feature := NewFeature(point)
+
+	assert.NotNil(t, feature)
+	assert.Equal(t, point, feature.Geometry)
+	assert.NotNil(t, feature.Properties)
+	assert.Len(t, feature.Properties, 0)
+	assert.Nil(t, feature.ID)
+}
+
+func TestFeature_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		feature  Feature
+		contains []string
+	}{
+		{
+			name: "simple point",
+			feature: Feature{
+				Geometry:   Point{Lon: 10.5, Lat: 59.9},
+				Properties: map[string]any{"name": "Oslo"},
+			},
+			contains: []string{`"type":"Feature"`, `"type":"Point"`, `"coordinates":[10.5,59.9]`, `"name":"Oslo"`},
+		},
+		{
+			name: "with ID",
+			feature: Feature{
+				ID:         "feature-1",
+				Geometry:   Point{Lon: 0, Lat: 0},
+				Properties: map[string]any{},
+			},
+			contains: []string{`"id":"feature-1"`},
+		},
+		{
+			name: "with numeric ID",
+			feature: Feature{
+				ID:         42,
+				Geometry:   Point{Lon: 0, Lat: 0},
+				Properties: map[string]any{},
+			},
+			contains: []string{`"id":42`},
+		},
+		{
+			name: "null geometry",
+			feature: Feature{
+				Geometry:   nil,
+				Properties: map[string]any{},
+			},
+			contains: []string{`"geometry":null`},
+		},
+		{
+			name: "with depth",
+			feature: Feature{
+				Geometry:   Point{Lon: 10.5, Lat: 59.9, Depth: 100},
+				Properties: map[string]any{},
+			},
+			contains: []string{`"coordinates":[10.5,59.9,100]`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.feature)
+			require.NoError(t, err)
+
+			for _, c := range tt.contains {
+				assert.Contains(t, string(data), c)
+			}
+		})
+	}
+}
+
+func TestFeature_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		expected Feature
+	}{
+		{
+			name: "simple point",
+			json: `{"type":"Feature","geometry":{"type":"Point","coordinates":[10.5,59.9]},"properties":{"name":"Oslo"}}`,
+			expected: Feature{
+				Geometry:   Point{Lon: 10.5, Lat: 59.9},
+				Properties: map[string]any{"name": "Oslo"},
+			},
+		},
+		{
+			name: "with string ID",
+			json: `{"type":"Feature","id":"feature-1","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}`,
+			expected: Feature{
+				ID:         "feature-1",
+				Geometry:   Point{Lon: 0, Lat: 0},
+				Properties: map[string]any{},
+			},
+		},
+		{
+			name: "with numeric ID",
+			json: `{"type":"Feature","id":42,"geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}`,
+			expected: Feature{
+				ID:         float64(42), // JSON numbers are parsed as float64
+				Geometry:   Point{Lon: 0, Lat: 0},
+				Properties: map[string]any{},
+			},
+		},
+		{
+			name: "null geometry",
+			json: `{"type":"Feature","geometry":null,"properties":{}}`,
+			expected: Feature{
+				Geometry:   nil,
+				Properties: map[string]any{},
+			},
+		},
+		{
+			name: "point with depth",
+			json: `{"type":"Feature","geometry":{"type":"Point","coordinates":[10.5,59.9,100]},"properties":{}}`,
+			expected: Feature{
+				Geometry:   Point{Lon: 10.5, Lat: 59.9, Depth: 100},
+				Properties: map[string]any{},
+			},
+		},
+		{
+			name: "linestring geometry",
+			json: `{"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{}}`,
+			expected: Feature{
+				Geometry:   LineString{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+				Properties: map[string]any{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var f Feature
+
+			err := json.Unmarshal([]byte(tt.json), &f)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected.ID, f.ID)
+			assert.Equal(t, tt.expected.Geometry, f.Geometry)
+			assert.Equal(t, tt.expected.Properties, f.Properties)
+		})
+	}
+}
+
+func TestFeature_RoundTrip(t *testing.T) {
+	tests := []struct {
+		name    string
+		feature Feature
+	}{
+		{
+			name: "point with properties",
+			feature: Feature{
+				ID:       "test-1",
+				Geometry: Point{Lon: 10.5, Lat: 59.9, Depth: 50},
+				Properties: map[string]any{
+					"name":   "Test Point",
+					"value":  123.45,
+					"active": true,
+				},
+			},
+		},
+		{
+			name: "polygon",
+			feature: Feature{
+				Geometry: Polygon{
+					Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}},
+				},
+				Properties: map[string]any{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.feature)
+			require.NoError(t, err)
+
+			var parsed Feature
+
+			err = json.Unmarshal(data, &parsed)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.feature.ID, parsed.ID)
+			assert.Equal(t, tt.feature.Geometry, parsed.Geometry)
+			assert.Equal(t, tt.feature.Properties, parsed.Properties)
+		})
+	}
+}
+
+func TestUnmarshalFeature(t *testing.T) {
+	json := `{"type":"Feature","geometry":{"type":"Point","coordinates":[10.5,59.9]},"properties":{"name":"Test"}}`
+
+	f, err := UnmarshalFeature([]byte(json))
+	require.NoError(t, err)
+	assert.NotNil(t, f)
+	assert.Equal(t, "Test", f.Properties["name"])
+
+	point, ok := f.Geometry.(Point)
+	require.True(t, ok)
+	assert.Equal(t, 10.5, point.Lon)
+	assert.Equal(t, 59.9, point.Lat)
+}
+
+// Tests for FeatureCollection
+
+func TestNewFeatureCollection(t *testing.T) {
+	fc := NewFeatureCollection()
+
+	assert.NotNil(t, fc)
+	assert.NotNil(t, fc.Features)
+	assert.Len(t, fc.Features, 0)
+}
+
+func TestFeatureCollection_Append(t *testing.T) {
+	fc := NewFeatureCollection()
+
+	f1 := NewFeature(Point{Lon: 0, Lat: 0})
+	f2 := NewFeature(Point{Lon: 1, Lat: 1})
+
+	result := fc.Append(f1).Append(f2)
+
+	assert.Equal(t, fc, result) // returns self for chaining
+	assert.Len(t, fc.Features, 2)
+	assert.Equal(t, f1, fc.Features[0])
+	assert.Equal(t, f2, fc.Features[1])
+}
+
+func TestFeatureCollection_MarshalJSON(t *testing.T) {
+	fc := NewFeatureCollection()
+	fc.Append(NewFeature(Point{Lon: 10.5, Lat: 59.9}))
+	fc.Features[0].Properties["name"] = "Oslo"
+
+	data, err := json.Marshal(fc)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(data), `"type":"FeatureCollection"`)
+	assert.Contains(t, string(data), `"features":[`)
+	assert.Contains(t, string(data), `"type":"Feature"`)
+	assert.Contains(t, string(data), `"name":"Oslo"`)
+}
+
+func TestFeatureCollection_UnmarshalJSON(t *testing.T) {
+	jsonData := `{
+		"type":"FeatureCollection",
+		"features":[
+			{"type":"Feature","geometry":{"type":"Point","coordinates":[10.5,59.9]},"properties":{"name":"Oslo"}},
+			{"type":"Feature","geometry":{"type":"Point","coordinates":[5.3,60.4]},"properties":{"name":"Bergen"}}
+		]
+	}`
+
+	var fc FeatureCollection
+
+	err := json.Unmarshal([]byte(jsonData), &fc)
+	require.NoError(t, err)
+
+	assert.Len(t, fc.Features, 2)
+	assert.Equal(t, "Oslo", fc.Features[0].Properties["name"])
+	assert.Equal(t, "Bergen", fc.Features[1].Properties["name"])
+
+	// Check geometry was parsed correctly
+	point, ok := fc.Features[0].Geometry.(Point)
+	require.True(t, ok)
+	assert.Equal(t, 10.5, point.Lon)
+	assert.Equal(t, 59.9, point.Lat)
+}
+
+func TestFeatureCollection_RoundTrip(t *testing.T) {
+	fc := NewFeatureCollection()
+
+	f1 := NewFeature(Point{Lon: 10.5, Lat: 59.9, Depth: 50})
+	f1.ID = "oslo"
+	f1.Properties["name"] = "Oslo"
+
+	f2 := NewFeature(LineString{{Lon: 0, Lat: 0, Depth: 10}, {Lon: 1, Lat: 1, Depth: 20}})
+	f2.Properties["type"] = "route"
+
+	fc.Append(f1).Append(f2)
+
+	data, err := json.Marshal(fc)
+	require.NoError(t, err)
+
+	var parsed FeatureCollection
+
+	err = json.Unmarshal(data, &parsed)
+	require.NoError(t, err)
+
+	assert.Len(t, parsed.Features, 2)
+	assert.Equal(t, "oslo", parsed.Features[0].ID)
+	assert.Equal(t, "Oslo", parsed.Features[0].Properties["name"])
+
+	// Check depth is preserved
+	point, ok := parsed.Features[0].Geometry.(Point)
+	require.True(t, ok)
+	assert.Equal(t, 50.0, point.Depth)
+
+	ls, ok := parsed.Features[1].Geometry.(LineString)
+	require.True(t, ok)
+	assert.Equal(t, 10.0, ls[0].Depth)
+	assert.Equal(t, 20.0, ls[1].Depth)
+}
+
+func TestUnmarshalFeatureCollection(t *testing.T) {
+	jsonData := `{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}]}`
+
+	fc, err := UnmarshalFeatureCollection([]byte(jsonData))
+	require.NoError(t, err)
+	assert.NotNil(t, fc)
+	assert.Len(t, fc.Features, 1)
+}
+
+func TestFeatureCollection_Errors(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		errContains string
+	}{
+		{
+			name:        "wrong type",
+			json:        `{"type":"Feature","geometry":null,"properties":{}}`,
+			errContains: "expected type FeatureCollection",
+		},
+		{
+			name:        "invalid JSON",
+			json:        `{not valid`,
+			errContains: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var fc FeatureCollection
+
+			err := json.Unmarshal([]byte(tt.json), &fc)
+			require.Error(t, err)
+			if tt.errContains != "" {
+				assert.Contains(t, err.Error(), tt.errContains)
+			}
+		})
+	}
+}
