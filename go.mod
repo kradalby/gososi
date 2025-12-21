@@ -1,10 +1,17 @@
 module github.com/kradalby/gososi
 
-go 1.24.5
+go 1.25
 
 require (
 	github.com/creachadair/command v0.2.0
+	github.com/go-json-experiment/json v0.0.0-20251027170946-4849db3c2f7e
 	github.com/paulmach/orb v0.11.1
+	github.com/stretchr/testify v1.11.1
 )
 
-require go.mongodb.org/mongo-driver v1.11.4 // indirect
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	go.mongodb.org/mongo-driver v1.11.4 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
