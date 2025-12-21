@@ -22,11 +22,17 @@ var (
 	errUnexpectedMultiPointType      = errors.New("unexpected geometry type, expected MultiPoint")
 	errUnexpectedMultiLineStringType = errors.New("unexpected geometry type, expected MultiLineString")
 	errUnexpectedMultiPolygonType    = errors.New("unexpected geometry type, expected MultiPolygon")
+	errUnknownGeometryType           = errors.New("unknown geometry type")
 	errInsufficientCoordinates       = errors.New("point requires at least 2 coordinates")
 	errUnsupportedScanType           = errors.New("cannot scan type into NullPoint")
 	errUnsupportedLineStringScan     = errors.New("cannot scan type into NullLineString")
 	errUnsupportedPolygonScan        = errors.New("cannot scan type into NullPolygon")
 )
+
+// Geometry is the interface implemented by all GeoJSON geometry types.
+type Geometry interface {
+	GeoJSONType() string
+}
 
 // Point represents a 3D geographic point.
 // Coordinates follow GeoJSON order: longitude, latitude, altitude/depth.
@@ -83,6 +89,11 @@ func (p *Point) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// GeoJSONType returns the GeoJSON type string.
+func (p Point) GeoJSONType() string {
+	return "Point"
 }
 
 // NullPoint represents a nullable Point for database storage.
@@ -222,6 +233,11 @@ func (ls *LineString) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// GeoJSONType returns the GeoJSON type string.
+func (ls LineString) GeoJSONType() string {
+	return "LineString"
+}
+
 // NullLineString represents a nullable LineString for database storage.
 //
 //nolint:recvcheck // intentionally mixed receivers for interface compliance
@@ -341,6 +357,12 @@ func (r Ring) Close() Ring {
 	return closed
 }
 
+// GeoJSONType returns the GeoJSON type string.
+// Note: Ring is not a standard GeoJSON type, but is used internally for Polygon construction.
+func (r Ring) GeoJSONType() string {
+	return "Ring"
+}
+
 // Equal compares two rings for equality.
 func (r Ring) Equal(other Ring) bool {
 	if len(r) != len(other) {
@@ -428,6 +450,11 @@ func (p *Polygon) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// GeoJSONType returns the GeoJSON type string.
+func (p Polygon) GeoJSONType() string {
+	return "Polygon"
 }
 
 // NullPolygon represents a nullable Polygon for database storage.
@@ -572,6 +599,11 @@ func (mp *MultiPoint) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// GeoJSONType returns the GeoJSON type string.
+func (mp MultiPoint) GeoJSONType() string {
+	return "MultiPoint"
+}
+
 // MultiLineString represents a collection of line strings.
 type MultiLineString []LineString
 
@@ -638,6 +670,11 @@ func (mls *MultiLineString) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// GeoJSONType returns the GeoJSON type string.
+func (mls MultiLineString) GeoJSONType() string {
+	return "MultiLineString"
 }
 
 // MultiPolygon represents a collection of polygons.
@@ -716,4 +753,63 @@ func (mpg *MultiPolygon) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// GeoJSONType returns the GeoJSON type string.
+func (mpg MultiPolygon) GeoJSONType() string {
+	return "MultiPolygon"
+}
+
+// geometryTypeJSON is used to extract the type field from GeoJSON.
+type geometryTypeJSON struct {
+	Type string `json:"type"`
+}
+
+// UnmarshalGeometry parses GeoJSON and returns the appropriate Geometry type.
+func UnmarshalGeometry(data []byte) (Geometry, error) {
+	var gt geometryTypeJSON
+	if err := json.Unmarshal(data, &gt); err != nil {
+		return nil, err
+	}
+
+	switch gt.Type {
+	case "Point":
+		var p Point
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, err
+		}
+		return p, nil
+	case "LineString":
+		var ls LineString
+		if err := json.Unmarshal(data, &ls); err != nil {
+			return nil, err
+		}
+		return ls, nil
+	case "Polygon":
+		var p Polygon
+		if err := json.Unmarshal(data, &p); err != nil {
+			return nil, err
+		}
+		return p, nil
+	case "MultiPoint":
+		var mp MultiPoint
+		if err := json.Unmarshal(data, &mp); err != nil {
+			return nil, err
+		}
+		return mp, nil
+	case "MultiLineString":
+		var mls MultiLineString
+		if err := json.Unmarshal(data, &mls); err != nil {
+			return nil, err
+		}
+		return mls, nil
+	case "MultiPolygon":
+		var mpg MultiPolygon
+		if err := json.Unmarshal(data, &mpg); err != nil {
+			return nil, err
+		}
+		return mpg, nil
+	default:
+		return nil, fmt.Errorf("%w: %q", errUnknownGeometryType, gt.Type)
+	}
 }

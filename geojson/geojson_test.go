@@ -1758,3 +1758,162 @@ func TestMultiPolygon_RoundTrip(t *testing.T) {
 		})
 	}
 }
+
+// Tests for Geometry interface
+
+func TestGeometry_GeoJSONType(t *testing.T) {
+	tests := []struct {
+		name     string
+		geometry Geometry
+		expected string
+	}{
+		{
+			name:     "Point",
+			geometry: Point{Lon: 10.5, Lat: 59.9},
+			expected: "Point",
+		},
+		{
+			name:     "LineString",
+			geometry: LineString{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+			expected: "LineString",
+		},
+		{
+			name:     "Ring",
+			geometry: Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 0, Lat: 0}},
+			expected: "Ring",
+		},
+		{
+			name:     "Polygon",
+			geometry: Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}}},
+			expected: "Polygon",
+		},
+		{
+			name:     "MultiPoint",
+			geometry: MultiPoint{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+			expected: "MultiPoint",
+		},
+		{
+			name:     "MultiLineString",
+			geometry: MultiLineString{LineString{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}}},
+			expected: "MultiLineString",
+		},
+		{
+			name:     "MultiPolygon",
+			geometry: MultiPolygon{Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 0, Lat: 0}}}},
+			expected: "MultiPolygon",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.geometry.GeoJSONType())
+		})
+	}
+}
+
+func TestUnmarshalGeometry(t *testing.T) {
+	tests := []struct {
+		name         string
+		json         string
+		expectedType string
+	}{
+		{
+			name:         "Point",
+			json:         `{"type":"Point","coordinates":[10.5,59.9]}`,
+			expectedType: "Point",
+		},
+		{
+			name:         "Point with depth",
+			json:         `{"type":"Point","coordinates":[10.5,59.9,100]}`,
+			expectedType: "Point",
+		},
+		{
+			name:         "LineString",
+			json:         `{"type":"LineString","coordinates":[[0,0],[1,1]]}`,
+			expectedType: "LineString",
+		},
+		{
+			name:         "Polygon",
+			json:         `{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`,
+			expectedType: "Polygon",
+		},
+		{
+			name:         "MultiPoint",
+			json:         `{"type":"MultiPoint","coordinates":[[0,0],[1,1]]}`,
+			expectedType: "MultiPoint",
+		},
+		{
+			name:         "MultiLineString",
+			json:         `{"type":"MultiLineString","coordinates":[[[0,0],[1,1]],[[2,2],[3,3]]]}`,
+			expectedType: "MultiLineString",
+		},
+		{
+			name:         "MultiPolygon",
+			json:         `{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[0,0]]]]}`,
+			expectedType: "MultiPolygon",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			geom, err := UnmarshalGeometry([]byte(tt.json))
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedType, geom.GeoJSONType())
+		})
+	}
+}
+
+func TestUnmarshalGeometry_TypeAssertion(t *testing.T) {
+	// Test that we can type assert to the correct type
+	pointJSON := `{"type":"Point","coordinates":[10.5,59.9,100]}`
+
+	geom, err := UnmarshalGeometry([]byte(pointJSON))
+	require.NoError(t, err)
+
+	point, ok := geom.(Point)
+	require.True(t, ok, "should be able to type assert to Point")
+	assert.Equal(t, 10.5, point.Lon)
+	assert.Equal(t, 59.9, point.Lat)
+	assert.Equal(t, 100.0, point.Depth)
+
+	// Test LineString
+	lsJSON := `{"type":"LineString","coordinates":[[0,0,5],[1,1,10]]}`
+
+	geom, err = UnmarshalGeometry([]byte(lsJSON))
+	require.NoError(t, err)
+
+	ls, ok := geom.(LineString)
+	require.True(t, ok, "should be able to type assert to LineString")
+	assert.Len(t, ls, 2)
+	assert.Equal(t, 5.0, ls[0].Depth)
+	assert.Equal(t, 10.0, ls[1].Depth)
+}
+
+func TestUnmarshalGeometry_Errors(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		errContains string
+	}{
+		{
+			name:        "unknown type",
+			json:        `{"type":"Unknown","coordinates":[0,0]}`,
+			errContains: "unknown geometry type",
+		},
+		{
+			name:        "invalid JSON",
+			json:        `{not valid`,
+			errContains: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := UnmarshalGeometry([]byte(tt.json))
+			require.Error(t, err)
+			if tt.errContains != "" {
+				assert.Contains(t, err.Error(), tt.errContains)
+			}
+		})
+	}
+}
