@@ -16,13 +16,16 @@ import (
 )
 
 var (
-	errUnexpectedPointType       = errors.New("unexpected geometry type, expected Point")
-	errUnexpectedLineStringType  = errors.New("unexpected geometry type, expected LineString")
-	errUnexpectedPolygonType     = errors.New("unexpected geometry type, expected Polygon")
-	errInsufficientCoordinates   = errors.New("point requires at least 2 coordinates")
-	errUnsupportedScanType       = errors.New("cannot scan type into NullPoint")
-	errUnsupportedLineStringScan = errors.New("cannot scan type into NullLineString")
-	errUnsupportedPolygonScan    = errors.New("cannot scan type into NullPolygon")
+	errUnexpectedPointType           = errors.New("unexpected geometry type, expected Point")
+	errUnexpectedLineStringType      = errors.New("unexpected geometry type, expected LineString")
+	errUnexpectedPolygonType         = errors.New("unexpected geometry type, expected Polygon")
+	errUnexpectedMultiPointType      = errors.New("unexpected geometry type, expected MultiPoint")
+	errUnexpectedMultiLineStringType = errors.New("unexpected geometry type, expected MultiLineString")
+	errUnexpectedMultiPolygonType    = errors.New("unexpected geometry type, expected MultiPolygon")
+	errInsufficientCoordinates       = errors.New("point requires at least 2 coordinates")
+	errUnsupportedScanType           = errors.New("cannot scan type into NullPoint")
+	errUnsupportedLineStringScan     = errors.New("cannot scan type into NullLineString")
+	errUnsupportedPolygonScan        = errors.New("cannot scan type into NullPolygon")
 )
 
 // Point represents a 3D geographic point.
@@ -507,4 +510,210 @@ func (np NullPolygon) Equal(other NullPolygon) bool {
 	}
 
 	return true
+}
+
+// MultiPoint represents a collection of points.
+type MultiPoint []Point
+
+// multiPointJSON is the GeoJSON representation.
+type multiPointJSON struct {
+	Type        string      `json:"type"`
+	Coordinates [][]float64 `json:"coordinates"`
+}
+
+// MarshalJSON implements json.Marshaler.
+func (mp MultiPoint) MarshalJSON() ([]byte, error) {
+	coords := make([][]float64, len(mp))
+
+	for i, p := range mp {
+		if p.Depth != 0 {
+			coords[i] = []float64{p.Lon, p.Lat, p.Depth}
+		} else {
+			coords[i] = []float64{p.Lon, p.Lat}
+		}
+	}
+
+	return json.Marshal(multiPointJSON{
+		Type:        "MultiPoint",
+		Coordinates: coords,
+	})
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (mp *MultiPoint) UnmarshalJSON(data []byte) error {
+	var mpj multiPointJSON
+
+	err := json.Unmarshal(data, &mpj)
+	if err != nil {
+		return err
+	}
+
+	if mpj.Type != "MultiPoint" {
+		return fmt.Errorf("%w: got %q", errUnexpectedMultiPointType, mpj.Type)
+	}
+
+	*mp = make(MultiPoint, len(mpj.Coordinates))
+
+	for i, coord := range mpj.Coordinates {
+		if len(coord) < 2 {
+			return fmt.Errorf("%w: got %d", errInsufficientCoordinates, len(coord))
+		}
+
+		(*mp)[i] = Point{
+			Lon: coord[0],
+			Lat: coord[1],
+		}
+
+		if len(coord) >= 3 {
+			(*mp)[i].Depth = coord[2]
+		}
+	}
+
+	return nil
+}
+
+// MultiLineString represents a collection of line strings.
+type MultiLineString []LineString
+
+// multiLineStringJSON is the GeoJSON representation.
+type multiLineStringJSON struct {
+	Type        string        `json:"type"`
+	Coordinates [][][]float64 `json:"coordinates"`
+}
+
+// MarshalJSON implements json.Marshaler.
+func (mls MultiLineString) MarshalJSON() ([]byte, error) {
+	coords := make([][][]float64, len(mls))
+
+	for i, ls := range mls {
+		coords[i] = make([][]float64, len(ls))
+
+		for j, p := range ls {
+			if p.Depth != 0 {
+				coords[i][j] = []float64{p.Lon, p.Lat, p.Depth}
+			} else {
+				coords[i][j] = []float64{p.Lon, p.Lat}
+			}
+		}
+	}
+
+	return json.Marshal(multiLineStringJSON{
+		Type:        "MultiLineString",
+		Coordinates: coords,
+	})
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (mls *MultiLineString) UnmarshalJSON(data []byte) error {
+	var mlsj multiLineStringJSON
+
+	err := json.Unmarshal(data, &mlsj)
+	if err != nil {
+		return err
+	}
+
+	if mlsj.Type != "MultiLineString" {
+		return fmt.Errorf("%w: got %q", errUnexpectedMultiLineStringType, mlsj.Type)
+	}
+
+	*mls = make(MultiLineString, len(mlsj.Coordinates))
+
+	for i, lineCoords := range mlsj.Coordinates {
+		(*mls)[i] = make(LineString, len(lineCoords))
+
+		for j, coord := range lineCoords {
+			if len(coord) < 2 {
+				return fmt.Errorf("%w: got %d", errInsufficientCoordinates, len(coord))
+			}
+
+			(*mls)[i][j] = Point{
+				Lon: coord[0],
+				Lat: coord[1],
+			}
+
+			if len(coord) >= 3 {
+				(*mls)[i][j].Depth = coord[2]
+			}
+		}
+	}
+
+	return nil
+}
+
+// MultiPolygon represents a collection of polygons.
+type MultiPolygon []Polygon
+
+// multiPolygonJSON is the GeoJSON representation.
+type multiPolygonJSON struct {
+	Type        string          `json:"type"`
+	Coordinates [][][][]float64 `json:"coordinates"`
+}
+
+// MarshalJSON implements json.Marshaler.
+func (mpg MultiPolygon) MarshalJSON() ([]byte, error) {
+	coords := make([][][][]float64, len(mpg))
+
+	for i, polygon := range mpg {
+		coords[i] = make([][][]float64, len(polygon))
+
+		for j, ring := range polygon {
+			// Auto-close rings during marshaling
+			closedRing := ring.Close()
+			coords[i][j] = make([][]float64, len(closedRing))
+
+			for k, pt := range closedRing {
+				if pt.Depth != 0 {
+					coords[i][j][k] = []float64{pt.Lon, pt.Lat, pt.Depth}
+				} else {
+					coords[i][j][k] = []float64{pt.Lon, pt.Lat}
+				}
+			}
+		}
+	}
+
+	return json.Marshal(multiPolygonJSON{
+		Type:        "MultiPolygon",
+		Coordinates: coords,
+	})
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (mpg *MultiPolygon) UnmarshalJSON(data []byte) error {
+	var mpgj multiPolygonJSON
+
+	err := json.Unmarshal(data, &mpgj)
+	if err != nil {
+		return err
+	}
+
+	if mpgj.Type != "MultiPolygon" {
+		return fmt.Errorf("%w: got %q", errUnexpectedMultiPolygonType, mpgj.Type)
+	}
+
+	*mpg = make(MultiPolygon, len(mpgj.Coordinates))
+
+	for i, polygonCoords := range mpgj.Coordinates {
+		(*mpg)[i] = make(Polygon, len(polygonCoords))
+
+		for j, ringCoords := range polygonCoords {
+			(*mpg)[i][j] = make(Ring, len(ringCoords))
+
+			for k, coord := range ringCoords {
+				if len(coord) < 2 {
+					return fmt.Errorf("%w: got %d", errInsufficientCoordinates, len(coord))
+				}
+
+				(*mpg)[i][j][k] = Point{
+					Lon: coord[0],
+					Lat: coord[1],
+				}
+
+				if len(coord) >= 3 {
+					(*mpg)[i][j][k].Depth = coord[2]
+				}
+			}
+		}
+	}
+
+	return nil
 }

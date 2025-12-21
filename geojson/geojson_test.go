@@ -1332,3 +1332,429 @@ func TestNullPolygon_Equal(t *testing.T) {
 		})
 	}
 }
+
+// MultiPoint tests
+
+func TestMultiPoint_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		mp       MultiPoint
+		expected string
+	}{
+		{
+			name:     "2D multipoint",
+			mp:       MultiPoint{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+			expected: `{"type":"MultiPoint","coordinates":[[0,0],[1,1]]}`,
+		},
+		{
+			name:     "3D multipoint",
+			mp:       MultiPoint{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 1, Depth: 10}},
+			expected: `{"type":"MultiPoint","coordinates":[[0,0,5],[1,1,10]]}`,
+		},
+		{
+			name:     "mixed 2D and 3D",
+			mp:       MultiPoint{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1, Depth: 5}},
+			expected: `{"type":"MultiPoint","coordinates":[[0,0],[1,1,5]]}`,
+		},
+		{
+			name:     "empty multipoint",
+			mp:       MultiPoint{},
+			expected: `{"type":"MultiPoint","coordinates":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.mp)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.expected, string(data))
+		})
+	}
+}
+
+func TestMultiPoint_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		expected MultiPoint
+	}{
+		{
+			name:     "2D multipoint",
+			json:     `{"type":"MultiPoint","coordinates":[[0,0],[1,1]]}`,
+			expected: MultiPoint{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+		},
+		{
+			name:     "3D multipoint",
+			json:     `{"type":"MultiPoint","coordinates":[[0,0,5],[1,1,10]]}`,
+			expected: MultiPoint{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 1, Depth: 10}},
+		},
+		{
+			name:     "empty multipoint",
+			json:     `{"type":"MultiPoint","coordinates":[]}`,
+			expected: MultiPoint{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mp MultiPoint
+
+			err := json.Unmarshal([]byte(tt.json), &mp)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, mp)
+		})
+	}
+}
+
+func TestMultiPoint_UnmarshalJSON_Errors(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		errContains string
+	}{
+		{
+			name:        "wrong type",
+			json:        `{"type":"Point","coordinates":[[0,0]]}`,
+			errContains: "expected MultiPoint",
+		},
+		{
+			name:        "insufficient coordinates",
+			json:        `{"type":"MultiPoint","coordinates":[[0]]}`,
+			errContains: "at least 2 coordinates",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mp MultiPoint
+
+			err := json.Unmarshal([]byte(tt.json), &mp)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errContains)
+		})
+	}
+}
+
+func TestMultiPoint_RoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		mp   MultiPoint
+	}{
+		{
+			name: "2D multipoint",
+			mp:   MultiPoint{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+		},
+		{
+			name: "3D multipoint",
+			mp:   MultiPoint{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 1, Depth: 10}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.mp)
+			require.NoError(t, err)
+
+			var parsed MultiPoint
+
+			err = json.Unmarshal(data, &parsed)
+			require.NoError(t, err)
+			assert.Equal(t, tt.mp, parsed)
+		})
+	}
+}
+
+// MultiLineString tests
+
+func TestMultiLineString_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		mls      MultiLineString
+		expected string
+	}{
+		{
+			name: "2D multilinestring",
+			mls: MultiLineString{
+				LineString{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+				LineString{{Lon: 2, Lat: 2}, {Lon: 3, Lat: 3}},
+			},
+			expected: `{"type":"MultiLineString","coordinates":[[[0,0],[1,1]],[[2,2],[3,3]]]}`,
+		},
+		{
+			name: "3D multilinestring",
+			mls: MultiLineString{
+				LineString{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 1, Depth: 10}},
+			},
+			expected: `{"type":"MultiLineString","coordinates":[[[0,0,5],[1,1,10]]]}`,
+		},
+		{
+			name:     "empty multilinestring",
+			mls:      MultiLineString{},
+			expected: `{"type":"MultiLineString","coordinates":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.mls)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.expected, string(data))
+		})
+	}
+}
+
+func TestMultiLineString_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		expected MultiLineString
+	}{
+		{
+			name: "2D multilinestring",
+			json: `{"type":"MultiLineString","coordinates":[[[0,0],[1,1]],[[2,2],[3,3]]]}`,
+			expected: MultiLineString{
+				LineString{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+				LineString{{Lon: 2, Lat: 2}, {Lon: 3, Lat: 3}},
+			},
+		},
+		{
+			name: "3D multilinestring",
+			json: `{"type":"MultiLineString","coordinates":[[[0,0,5],[1,1,10]]]}`,
+			expected: MultiLineString{
+				LineString{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 1, Depth: 10}},
+			},
+		},
+		{
+			name:     "empty multilinestring",
+			json:     `{"type":"MultiLineString","coordinates":[]}`,
+			expected: MultiLineString{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mls MultiLineString
+
+			err := json.Unmarshal([]byte(tt.json), &mls)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, mls)
+		})
+	}
+}
+
+func TestMultiLineString_UnmarshalJSON_Errors(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		errContains string
+	}{
+		{
+			name:        "wrong type",
+			json:        `{"type":"LineString","coordinates":[[[0,0]]]}`,
+			errContains: "expected MultiLineString",
+		},
+		{
+			name:        "insufficient coordinates",
+			json:        `{"type":"MultiLineString","coordinates":[[[0]]]}`,
+			errContains: "at least 2 coordinates",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mls MultiLineString
+
+			err := json.Unmarshal([]byte(tt.json), &mls)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errContains)
+		})
+	}
+}
+
+func TestMultiLineString_RoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		mls  MultiLineString
+	}{
+		{
+			name: "2D multilinestring",
+			mls: MultiLineString{
+				LineString{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+				LineString{{Lon: 2, Lat: 2}, {Lon: 3, Lat: 3}},
+			},
+		},
+		{
+			name: "3D multilinestring",
+			mls: MultiLineString{
+				LineString{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 1, Depth: 10}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.mls)
+			require.NoError(t, err)
+
+			var parsed MultiLineString
+
+			err = json.Unmarshal(data, &parsed)
+			require.NoError(t, err)
+			assert.Equal(t, tt.mls, parsed)
+		})
+	}
+}
+
+// MultiPolygon tests
+
+func TestMultiPolygon_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		mpg      MultiPolygon
+		expected string
+	}{
+		{
+			name: "simple multipolygon",
+			mpg: MultiPolygon{
+				Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}}},
+			},
+			expected: `{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,0]]]]}`,
+		},
+		{
+			name: "multiple polygons",
+			mpg: MultiPolygon{
+				Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 0, Lat: 0}}},
+				Polygon{Ring{{Lon: 2, Lat: 2}, {Lon: 3, Lat: 2}, {Lon: 2, Lat: 2}}},
+			},
+			expected: `{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[0,0]]],[[[2,2],[3,2],[2,2]]]]}`,
+		},
+		{
+			name: "with depth",
+			mpg: MultiPolygon{
+				Polygon{Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 5}, {Lon: 0, Lat: 0, Depth: 5}}},
+			},
+			expected: `{"type":"MultiPolygon","coordinates":[[[[0,0,5],[1,0,5],[0,0,5]]]]}`,
+		},
+		{
+			name:     "empty multipolygon",
+			mpg:      MultiPolygon{},
+			expected: `{"type":"MultiPolygon","coordinates":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.mpg)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.expected, string(data))
+		})
+	}
+}
+
+func TestMultiPolygon_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		expected MultiPolygon
+	}{
+		{
+			name: "simple multipolygon",
+			json: `{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,0]]]]}`,
+			expected: MultiPolygon{
+				Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}}},
+			},
+		},
+		{
+			name: "multiple polygons",
+			json: `{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[0,0]]],[[[2,2],[3,2],[2,2]]]]}`,
+			expected: MultiPolygon{
+				Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 0, Lat: 0}}},
+				Polygon{Ring{{Lon: 2, Lat: 2}, {Lon: 3, Lat: 2}, {Lon: 2, Lat: 2}}},
+			},
+		},
+		{
+			name: "with depth",
+			json: `{"type":"MultiPolygon","coordinates":[[[[0,0,5],[1,0,5],[0,0,5]]]]}`,
+			expected: MultiPolygon{
+				Polygon{Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 5}, {Lon: 0, Lat: 0, Depth: 5}}},
+			},
+		},
+		{
+			name:     "empty multipolygon",
+			json:     `{"type":"MultiPolygon","coordinates":[]}`,
+			expected: MultiPolygon{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mpg MultiPolygon
+
+			err := json.Unmarshal([]byte(tt.json), &mpg)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, mpg)
+		})
+	}
+}
+
+func TestMultiPolygon_UnmarshalJSON_Errors(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		errContains string
+	}{
+		{
+			name:        "wrong type",
+			json:        `{"type":"Polygon","coordinates":[[[[0,0]]]]}`,
+			errContains: "expected MultiPolygon",
+		},
+		{
+			name:        "insufficient coordinates",
+			json:        `{"type":"MultiPolygon","coordinates":[[[[0]]]]}`,
+			errContains: "at least 2 coordinates",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mpg MultiPolygon
+
+			err := json.Unmarshal([]byte(tt.json), &mpg)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errContains)
+		})
+	}
+}
+
+func TestMultiPolygon_RoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		mpg  MultiPolygon
+	}{
+		{
+			name: "simple multipolygon",
+			mpg: MultiPolygon{
+				Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}}},
+			},
+		},
+		{
+			name: "with depth",
+			mpg: MultiPolygon{
+				Polygon{Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 10}, {Lon: 0, Lat: 0, Depth: 5}}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.mpg)
+			require.NoError(t, err)
+
+			var parsed MultiPolygon
+
+			err = json.Unmarshal(data, &parsed)
+			require.NoError(t, err)
+			assert.Equal(t, tt.mpg, parsed)
+		})
+	}
+}
