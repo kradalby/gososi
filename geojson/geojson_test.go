@@ -822,3 +822,513 @@ func TestNullLineString_Equal(t *testing.T) {
 		})
 	}
 }
+
+// Ring tests
+
+func TestRing_IsClosed(t *testing.T) {
+	tests := []struct {
+		name     string
+		ring     Ring
+		expected bool
+	}{
+		{
+			name:     "closed ring",
+			ring:     Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}},
+			expected: true,
+		},
+		{
+			name:     "open ring",
+			ring:     Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}},
+			expected: false,
+		},
+		{
+			name:     "closed ring with depth",
+			ring:     Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 5}, {Lon: 0, Lat: 0, Depth: 5}},
+			expected: true,
+		},
+		{
+			name:     "open ring different depth",
+			ring:     Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 5}, {Lon: 0, Lat: 0, Depth: 10}},
+			expected: false,
+		},
+		{
+			name:     "empty ring",
+			ring:     Ring{},
+			expected: false,
+		},
+		{
+			name:     "single point",
+			ring:     Ring{{Lon: 0, Lat: 0}},
+			expected: false,
+		},
+		{
+			name:     "two same points",
+			ring:     Ring{{Lon: 0, Lat: 0}, {Lon: 0, Lat: 0}},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.ring.IsClosed()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestRing_Close(t *testing.T) {
+	tests := []struct {
+		name     string
+		ring     Ring
+		expected Ring
+	}{
+		{
+			name:     "already closed",
+			ring:     Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 0, Lat: 0}},
+			expected: Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 0, Lat: 0}},
+		},
+		{
+			name:     "needs closing",
+			ring:     Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}},
+			expected: Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}},
+		},
+		{
+			name:     "empty ring",
+			ring:     Ring{},
+			expected: Ring{},
+		},
+		{
+			name:     "with depth",
+			ring:     Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 10}},
+			expected: Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 10}, {Lon: 0, Lat: 0, Depth: 5}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.ring.Close()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestRing_Equal(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        Ring
+		b        Ring
+		expected bool
+	}{
+		{
+			name:     "equal rings",
+			a:        Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+			b:        Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+			expected: true,
+		},
+		{
+			name:     "different lengths",
+			a:        Ring{{Lon: 0, Lat: 0}},
+			b:        Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+			expected: false,
+		},
+		{
+			name:     "different coordinates",
+			a:        Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}},
+			b:        Ring{{Lon: 0, Lat: 0}, {Lon: 2, Lat: 2}},
+			expected: false,
+		},
+		{
+			name:     "different depth",
+			a:        Ring{{Lon: 0, Lat: 0, Depth: 5}},
+			b:        Ring{{Lon: 0, Lat: 0, Depth: 10}},
+			expected: false,
+		},
+		{
+			name:     "both empty",
+			a:        Ring{},
+			b:        Ring{},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.a.Equal(tt.b)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Polygon tests
+
+func TestPolygon_MarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		polygon  Polygon
+		expected string
+	}{
+		{
+			name: "simple polygon",
+			polygon: Polygon{
+				Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}},
+			},
+			expected: `{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`,
+		},
+		{
+			name: "polygon with hole",
+			polygon: Polygon{
+				Ring{{Lon: 0, Lat: 0}, {Lon: 10, Lat: 0}, {Lon: 10, Lat: 10}, {Lon: 0, Lat: 0}},
+				Ring{{Lon: 2, Lat: 2}, {Lon: 8, Lat: 2}, {Lon: 8, Lat: 8}, {Lon: 2, Lat: 2}},
+			},
+			expected: `{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,0]],[[2,2],[8,2],[8,8],[2,2]]]}`,
+		},
+		{
+			name: "polygon with depth",
+			polygon: Polygon{
+				Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 5}, {Lon: 0, Lat: 0, Depth: 5}},
+			},
+			expected: `{"type":"Polygon","coordinates":[[[0,0,5],[1,0,5],[0,0,5]]]}`,
+		},
+		{
+			name: "auto-closes open ring",
+			polygon: Polygon{
+				Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}},
+			},
+			expected: `{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`,
+		},
+		{
+			name:     "empty polygon",
+			polygon:  Polygon{},
+			expected: `{"type":"Polygon","coordinates":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.polygon)
+			require.NoError(t, err)
+			assert.JSONEq(t, tt.expected, string(data))
+		})
+	}
+}
+
+func TestPolygon_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		expected Polygon
+	}{
+		{
+			name: "simple polygon",
+			json: `{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`,
+			expected: Polygon{
+				Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}},
+			},
+		},
+		{
+			name: "polygon with hole",
+			json: `{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,0]],[[2,2],[8,2],[8,8],[2,2]]]}`,
+			expected: Polygon{
+				Ring{{Lon: 0, Lat: 0}, {Lon: 10, Lat: 0}, {Lon: 10, Lat: 10}, {Lon: 0, Lat: 0}},
+				Ring{{Lon: 2, Lat: 2}, {Lon: 8, Lat: 2}, {Lon: 8, Lat: 8}, {Lon: 2, Lat: 2}},
+			},
+		},
+		{
+			name: "polygon with depth",
+			json: `{"type":"Polygon","coordinates":[[[0,0,5],[1,0,5],[0,0,5]]]}`,
+			expected: Polygon{
+				Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 5}, {Lon: 0, Lat: 0, Depth: 5}},
+			},
+		},
+		{
+			name:     "empty polygon",
+			json:     `{"type":"Polygon","coordinates":[]}`,
+			expected: Polygon{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var p Polygon
+
+			err := json.Unmarshal([]byte(tt.json), &p)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, p)
+		})
+	}
+}
+
+func TestPolygon_UnmarshalJSON_Errors(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		errContains string
+	}{
+		{
+			name:        "wrong type",
+			json:        `{"type":"Point","coordinates":[[[0,0]]]}`,
+			errContains: "expected Polygon",
+		},
+		{
+			name:        "insufficient coordinates in point",
+			json:        `{"type":"Polygon","coordinates":[[[0]]]}`,
+			errContains: "at least 2 coordinates",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var p Polygon
+
+			err := json.Unmarshal([]byte(tt.json), &p)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errContains)
+		})
+	}
+}
+
+func TestPolygon_RoundTrip(t *testing.T) {
+	tests := []struct {
+		name    string
+		polygon Polygon
+	}{
+		{
+			name: "simple polygon",
+			polygon: Polygon{
+				Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}},
+			},
+		},
+		{
+			name: "polygon with hole",
+			polygon: Polygon{
+				Ring{{Lon: 0, Lat: 0}, {Lon: 10, Lat: 0}, {Lon: 10, Lat: 10}, {Lon: 0, Lat: 0}},
+				Ring{{Lon: 2, Lat: 2}, {Lon: 8, Lat: 2}, {Lon: 8, Lat: 8}, {Lon: 2, Lat: 2}},
+			},
+		},
+		{
+			name: "polygon with depth",
+			polygon: Polygon{
+				Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 10}, {Lon: 0, Lat: 0, Depth: 5}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.polygon)
+			require.NoError(t, err)
+
+			var parsed Polygon
+
+			err = json.Unmarshal(data, &parsed)
+			require.NoError(t, err)
+			assert.Equal(t, tt.polygon, parsed)
+		})
+	}
+}
+
+// NullPolygon tests
+
+func TestNullPolygon_Scan(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected NullPolygon
+		wantErr  bool
+	}{
+		{
+			name:  "scan JSON string",
+			input: `{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}`,
+			expected: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}}},
+				Valid:   true,
+			},
+		},
+		{
+			name:  "scan JSON bytes",
+			input: []byte(`{"type":"Polygon","coordinates":[[[0,0,5],[1,0,5],[0,0,5]]]}`),
+			expected: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 5}, {Lon: 0, Lat: 0, Depth: 5}}},
+				Valid:   true,
+			},
+		},
+		{
+			name:     "scan nil",
+			input:    nil,
+			expected: NullPolygon{Valid: false},
+		},
+		{
+			name:     "scan empty string",
+			input:    "",
+			expected: NullPolygon{Valid: false},
+		},
+		{
+			name:    "unsupported type",
+			input:   12345,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var np NullPolygon
+
+			err := np.Scan(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected.Valid, np.Valid)
+
+			if tt.expected.Valid {
+				assert.Equal(t, tt.expected.Polygon, np.Polygon)
+			}
+		})
+	}
+}
+
+func TestNullPolygon_Value(t *testing.T) {
+	tests := []struct {
+		name     string
+		np       NullPolygon
+		expected any
+	}{
+		{
+			name: "valid polygon",
+			np: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 0, Lat: 0}}},
+				Valid:   true,
+			},
+			expected: `{"type":"Polygon","coordinates":[[[0,0],[1,0],[0,0]]]}`,
+		},
+		{
+			name:     "null value",
+			np:       NullPolygon{Valid: false},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, err := tt.np.Value()
+			require.NoError(t, err)
+
+			if tt.expected == nil {
+				assert.Nil(t, val)
+			} else {
+				assert.JSONEq(t, tt.expected.(string), val.(string))
+			}
+		})
+	}
+}
+
+func TestNullPolygon_DatabaseRoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		np   NullPolygon
+	}{
+		{
+			name: "simple polygon",
+			np: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 0}, {Lon: 1, Lat: 1}, {Lon: 0, Lat: 0}}},
+				Valid:   true,
+			},
+		},
+		{
+			name: "polygon with depth",
+			np: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0, Depth: 5}, {Lon: 1, Lat: 0, Depth: 10}, {Lon: 0, Lat: 0, Depth: 5}}},
+				Valid:   true,
+			},
+		},
+		{
+			name: "null polygon",
+			np:   NullPolygon{Valid: false},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, err := tt.np.Value()
+			require.NoError(t, err)
+
+			var np2 NullPolygon
+
+			err = np2.Scan(val)
+			require.NoError(t, err)
+
+			assert.True(t, tt.np.Equal(np2), "round trip should preserve value")
+		})
+	}
+}
+
+func TestNullPolygon_Equal(t *testing.T) {
+	tests := []struct {
+		name     string
+		a        NullPolygon
+		b        NullPolygon
+		expected bool
+	}{
+		{
+			name:     "both invalid",
+			a:        NullPolygon{Valid: false},
+			b:        NullPolygon{Valid: false},
+			expected: true,
+		},
+		{
+			name: "first valid second invalid",
+			a: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}}},
+				Valid:   true,
+			},
+			b:        NullPolygon{Valid: false},
+			expected: false,
+		},
+		{
+			name: "equal polygons",
+			a: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}}},
+				Valid:   true,
+			},
+			b: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}, {Lon: 1, Lat: 1}}},
+				Valid:   true,
+			},
+			expected: true,
+		},
+		{
+			name: "different ring count",
+			a: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}}},
+				Valid:   true,
+			},
+			b: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}}, Ring{{Lon: 1, Lat: 1}}},
+				Valid:   true,
+			},
+			expected: false,
+		},
+		{
+			name: "different coordinates",
+			a: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 0, Lat: 0}}},
+				Valid:   true,
+			},
+			b: NullPolygon{
+				Polygon: Polygon{Ring{{Lon: 1, Lat: 1}}},
+				Valid:   true,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.a.Equal(tt.b)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
