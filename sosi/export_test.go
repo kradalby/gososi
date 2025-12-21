@@ -5,8 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/paulmach/orb"
-	"github.com/paulmach/orb/geojson"
+	"github.com/kradalby/gososi/geojson"
 )
 
 // TestToGeoJSON tests the basic GeoJSON export functionality
@@ -348,26 +347,24 @@ func TestGeometryCoordinateMapping(t *testing.T) {
 		t.Fatalf("Expected Point geometry, got %s", feature.Geometry.GeoJSONType())
 	}
 
-	// Extract coordinates from orb.Point
-	point := feature.Geometry.(orb.Point)
-	coordinates := []float64{point[0], point[1]}
-
-	if len(coordinates) != 2 {
-		t.Fatalf("Expected 2 coordinates, got %d", len(coordinates))
+	// Extract coordinates from geojson.Point
+	point, ok := feature.Geometry.(geojson.Point)
+	if !ok {
+		t.Fatalf("Expected geojson.Point, got %T", feature.Geometry)
 	}
 
-	// Check coordinate values - should be [lon, lat] in GeoJSON
-	expectedX := 10.5678 // longitude
-	expectedY := 59.1234 // latitude
+	// Check coordinate values - Lon and Lat are explicit fields
+	expectedLon := 10.5678 // longitude
+	expectedLat := 59.1234 // latitude
 
 	tolerance := 0.0001
-	if abs(coordinates[0]-expectedX) > tolerance {
-		t.Errorf("X coordinate: expected %f, got %f", expectedX, coordinates[0])
+	if abs(point.Lon-expectedLon) > tolerance {
+		t.Errorf("Longitude: expected %f, got %f", expectedLon, point.Lon)
 	}
 
-	if abs(coordinates[1]-expectedY) > tolerance {
-		t.Errorf("Y coordinate: expected %f, got %f", expectedY, coordinates[1])
+	if abs(point.Lat-expectedLat) > tolerance {
+		t.Errorf("Latitude: expected %f, got %f", expectedLat, point.Lat)
 	}
 
-	t.Logf("Coordinates correctly mapped: [%f, %f]", coordinates[0], coordinates[1])
+	t.Logf("Coordinates correctly mapped: [%f, %f]", point.Lon, point.Lat)
 }

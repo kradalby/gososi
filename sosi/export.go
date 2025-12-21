@@ -2,12 +2,11 @@ package sosi
 
 import (
 	"fmt"
-	"github.com/paulmach/orb"
-	"github.com/paulmach/orb/geojson"
+
+	"github.com/kradalby/gososi/geojson"
 )
 
-// ToGeoJSON converts a SOSIDocument to a GeoJSON FeatureCollection
-// Uses github.com/paulmach/orb/geojson for standard-compliant GeoJSON output
+// ToGeoJSON converts a SOSIDocument to a GeoJSON FeatureCollection.
 func (doc *SOSIDocument) ToGeoJSON() (*geojson.FeatureCollection, error) {
 	fc := geojson.NewFeatureCollection()
 
@@ -22,10 +21,10 @@ func (doc *SOSIDocument) ToGeoJSON() (*geojson.FeatureCollection, error) {
 	return fc, nil
 }
 
-// convertSOSIFeatureToGeoJSON converts a single SOSIFeature to GeoJSON Feature
+// convertSOSIFeatureToGeoJSON converts a single SOSIFeature to GeoJSON Feature.
 func convertSOSIFeatureToGeoJSON(feature *SOSIFeature, header *SOSIHeader) (*geojson.Feature, error) {
 	// Convert geometry based on SOSI type
-	var geometry orb.Geometry
+	var geometry geojson.Geometry
 	var err error
 
 	switch feature.Type {
@@ -82,33 +81,33 @@ func convertSOSIFeatureToGeoJSON(feature *SOSIFeature, header *SOSIHeader) (*geo
 	return geoFeature, nil
 }
 
-// convertPointGeometry converts SOSI PUNKT to GeoJSON Point
-func convertPointGeometry(feature *SOSIFeature) (orb.Geometry, error) {
+// convertPointGeometry converts SOSI PUNKT to GeoJSON Point.
+func convertPointGeometry(feature *SOSIFeature) (geojson.Geometry, error) {
 	if len(feature.Coordinates) == 0 {
 		return nil, fmt.Errorf("point feature has no coordinates")
 	}
 
 	coord := feature.Coordinates[0]
-	return orb.Point{coord.X, coord.Y}, nil
+	return geojson.Point{Lon: coord.X, Lat: coord.Y, Depth: coord.Z}, nil
 }
 
-// convertLineStringGeometry converts SOSI KURVE to GeoJSON LineString
-func convertLineStringGeometry(feature *SOSIFeature) (orb.Geometry, error) {
+// convertLineStringGeometry converts SOSI KURVE to GeoJSON LineString.
+func convertLineStringGeometry(feature *SOSIFeature) (geojson.Geometry, error) {
 	if len(feature.Coordinates) < 2 {
 		return nil, fmt.Errorf("linestring feature needs at least 2 coordinates, got %d", len(feature.Coordinates))
 	}
 
-	lineString := orb.LineString{}
-	for _, coord := range feature.Coordinates {
-		lineString = append(lineString, orb.Point{coord.X, coord.Y})
+	lineString := make(geojson.LineString, len(feature.Coordinates))
+	for i, coord := range feature.Coordinates {
+		lineString[i] = geojson.Point{Lon: coord.X, Lat: coord.Y, Depth: coord.Z}
 	}
 
 	return lineString, nil
 }
 
-// convertPolygonGeometry converts SOSI FLATE to GeoJSON Polygon
-// Handles both simple polygons and polygons with holes
-func convertPolygonGeometry(feature *SOSIFeature) (orb.Geometry, error) {
+// convertPolygonGeometry converts SOSI FLATE to GeoJSON Polygon.
+// Handles both simple polygons and polygons with holes.
+func convertPolygonGeometry(feature *SOSIFeature) (geojson.Geometry, error) {
 	// For simple polygon with direct coordinates
 	if len(feature.Coordinates) > 0 && len(feature.Refs) == 0 {
 		return convertSimplePolygon(feature.Coordinates), nil
@@ -123,38 +122,34 @@ func convertPolygonGeometry(feature *SOSIFeature) (orb.Geometry, error) {
 	return nil, fmt.Errorf("polygon feature has no coordinates or references")
 }
 
-// convertArcGeometry converts SOSI BUEP (arc) to GeoJSON LineString
-// The arc should already be interpolated to linestring coordinates
-func convertArcGeometry(feature *SOSIFeature) (orb.Geometry, error) {
+// convertArcGeometry converts SOSI BUEP (arc) to GeoJSON LineString.
+// The arc should already be interpolated to linestring coordinates.
+func convertArcGeometry(feature *SOSIFeature) (geojson.Geometry, error) {
 	if len(feature.Coordinates) < 2 {
 		return nil, fmt.Errorf("arc feature needs at least 2 coordinates after interpolation, got %d", len(feature.Coordinates))
 	}
 
-	lineString := orb.LineString{}
-	for _, coord := range feature.Coordinates {
-		lineString = append(lineString, orb.Point{coord.X, coord.Y})
+	lineString := make(geojson.LineString, len(feature.Coordinates))
+	for i, coord := range feature.Coordinates {
+		lineString[i] = geojson.Point{Lon: coord.X, Lat: coord.Y, Depth: coord.Z}
 	}
 
 	return lineString, nil
 }
 
-// convertSimplePolygon converts coordinates to a simple polygon
-func convertSimplePolygon(coordinates []Coordinate) orb.Polygon {
-	ring := orb.Ring{}
-	for _, coord := range coordinates {
-		ring = append(ring, orb.Point{coord.X, coord.Y})
+// convertSimplePolygon converts coordinates to a simple polygon.
+func convertSimplePolygon(coordinates []Coordinate) geojson.Polygon {
+	ring := make(geojson.Ring, len(coordinates))
+	for i, coord := range coordinates {
+		ring[i] = geojson.Point{Lon: coord.X, Lat: coord.Y, Depth: coord.Z}
 	}
 
-	// Ensure ring is closed
-	if len(ring) > 0 && !ring[0].Equal(ring[len(ring)-1]) {
-		ring = append(ring, ring[0])
-	}
-
-	return orb.Polygon{ring}
+	// Ring will be auto-closed by geojson.Polygon.MarshalJSON
+	return geojson.Polygon{ring}
 }
 
-// ToGeoJSONWithReferences converts SOSIDocument to GeoJSON with full reference resolution
-// This handles complex polygons that reference other features
+// ToGeoJSONWithReferences converts SOSIDocument to GeoJSON with full reference resolution.
+// This handles complex polygons that reference other features.
 func (doc *SOSIDocument) ToGeoJSONWithReferences() (*geojson.FeatureCollection, error) {
 	fc := geojson.NewFeatureCollection()
 
@@ -175,9 +170,9 @@ func (doc *SOSIDocument) ToGeoJSONWithReferences() (*geojson.FeatureCollection, 
 	return fc, nil
 }
 
-// convertSOSIFeatureWithReferences converts SOSI feature with reference resolution support
+// convertSOSIFeatureWithReferences converts SOSI feature with reference resolution support.
 func convertSOSIFeatureWithReferences(feature *SOSIFeature, header *SOSIHeader, featureMap map[int]*SOSIFeature) (*geojson.Feature, error) {
-	var geometry orb.Geometry
+	var geometry geojson.Geometry
 	var err error
 
 	switch feature.Type {
@@ -234,8 +229,8 @@ func convertSOSIFeatureWithReferences(feature *SOSIFeature, header *SOSIHeader, 
 	return geoFeature, nil
 }
 
-// convertPolygonWithReferences converts FLATE with reference resolution
-func convertPolygonWithReferences(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (orb.Geometry, error) {
+// convertPolygonWithReferences converts FLATE with reference resolution.
+func convertPolygonWithReferences(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (geojson.Geometry, error) {
 	// Simple polygon case
 	if len(feature.Coordinates) > 0 && len(feature.Refs) == 0 {
 		return convertSimplePolygon(feature.Coordinates), nil
@@ -249,8 +244,8 @@ func convertPolygonWithReferences(feature *SOSIFeature, featureMap map[int]*SOSI
 	return nil, fmt.Errorf("polygon feature has no coordinates or references")
 }
 
-// buildPolygonFromReferences constructs polygon from referenced KURVE features
-func buildPolygonFromReferences(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (orb.Polygon, error) {
+// buildPolygonFromReferences constructs polygon from referenced KURVE features.
+func buildPolygonFromReferences(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (geojson.Polygon, error) {
 	// Handle polygon with holes structure
 	if len(feature.OuterRing) > 0 {
 		return buildPolygonWithHoles(feature, featureMap)
@@ -262,18 +257,18 @@ func buildPolygonFromReferences(feature *SOSIFeature, featureMap map[int]*SOSIFe
 		return nil, fmt.Errorf("building outer ring: %w", err)
 	}
 
-	return orb.Polygon{ring}, nil
+	return geojson.Polygon{ring}, nil
 }
 
-// buildPolygonWithHoles constructs polygon with holes from references
-func buildPolygonWithHoles(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (orb.Polygon, error) {
+// buildPolygonWithHoles constructs polygon with holes from references.
+func buildPolygonWithHoles(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (geojson.Polygon, error) {
 	// Build outer ring
 	outerRing, err := buildRingFromReferences(feature.OuterRing, featureMap)
 	if err != nil {
 		return nil, fmt.Errorf("building outer ring: %w", err)
 	}
 
-	polygon := orb.Polygon{outerRing}
+	polygon := geojson.Polygon{outerRing}
 
 	// Build holes
 	for i, holeRefs := range feature.Holes {
@@ -287,9 +282,9 @@ func buildPolygonWithHoles(feature *SOSIFeature, featureMap map[int]*SOSIFeature
 	return polygon, nil
 }
 
-// buildRingFromReferences constructs a ring from referenced KURVE features
-func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (orb.Ring, error) {
-	ring := orb.Ring{}
+// buildRingFromReferences constructs a ring from referenced KURVE features.
+func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (geojson.Ring, error) {
+	ring := geojson.Ring{}
 
 	for _, refID := range refs {
 		// Handle negative references by taking absolute value
@@ -313,12 +308,12 @@ func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (orb.R
 			if refID < 0 {
 				// Reverse coordinate order for negative references
 				for i := len(coords) - 1; i >= 0; i-- {
-					ring = append(ring, orb.Point{coords[i].X, coords[i].Y})
+					ring = append(ring, geojson.Point{Lon: coords[i].X, Lat: coords[i].Y, Depth: coords[i].Z})
 				}
 			} else {
 				// Normal order for positive references
 				for _, coord := range coords {
-					ring = append(ring, orb.Point{coord.X, coord.Y})
+					ring = append(ring, geojson.Point{Lon: coord.X, Lat: coord.Y, Depth: coord.Z})
 				}
 			}
 		case "FLATE":
@@ -330,7 +325,7 @@ func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (orb.R
 			}
 
 			// Get the outer ring (first ring) of the referenced polygon
-			if polygon, ok := polygonGeometry.(orb.Polygon); ok && len(polygon) > 0 {
+			if polygon, ok := polygonGeometry.(geojson.Polygon); ok && len(polygon) > 0 {
 				outerRing := polygon[0]
 				if refID < 0 {
 					// Reverse ring direction for negative references
@@ -347,10 +342,6 @@ func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (orb.R
 		}
 	}
 
-	// Ensure ring is closed
-	if len(ring) > 0 && !ring[0].Equal(ring[len(ring)-1]) {
-		ring = append(ring, ring[0])
-	}
-
+	// Ring will be auto-closed by geojson.Polygon.MarshalJSON if needed
 	return ring, nil
 }
