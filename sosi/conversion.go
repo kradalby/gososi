@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"github.com/paulmach/orb"
-	"github.com/paulmach/orb/geojson"
+
+	"github.com/kradalby/gososi/geojson"
 )
 
 // GeoJSONtoSOSI converts GeoJSON data to SOSI format
@@ -140,18 +140,18 @@ func convertGeoJSONFeatureToSOSI(feature *geojson.Feature, id int, objectTypes m
 	}, nil
 }
 
-// convertGeoJSONGeometryToCoordinates converts GeoJSON geometry to SOSI coordinates
-func convertGeoJSONGeometryToCoordinates(geom orb.Geometry) ([]Coordinate, error) {
+// convertGeoJSONGeometryToCoordinates converts GeoJSON geometry to SOSI coordinates.
+func convertGeoJSONGeometryToCoordinates(geom geojson.Geometry) ([]Coordinate, error) {
 	switch g := geom.(type) {
-	case orb.Point:
-		return []Coordinate{{X: g.Lon(), Y: g.Lat(), Z: 0}}, nil
-	case orb.LineString:
+	case geojson.Point:
+		return []Coordinate{{X: g.Lon, Y: g.Lat, Z: g.Depth}}, nil
+	case geojson.LineString:
 		coords := make([]Coordinate, len(g))
 		for i, point := range g {
-			coords[i] = Coordinate{X: point.Lon(), Y: point.Lat(), Z: 0}
+			coords[i] = Coordinate{X: point.Lon, Y: point.Lat, Z: point.Depth}
 		}
 		return coords, nil
-	case orb.Polygon:
+	case geojson.Polygon:
 		if len(g) == 0 {
 			return nil, fmt.Errorf("empty polygon")
 		}
@@ -159,7 +159,7 @@ func convertGeoJSONGeometryToCoordinates(geom orb.Geometry) ([]Coordinate, error
 		ring := g[0]
 		coords := make([]Coordinate, len(ring))
 		for i, point := range ring {
-			coords[i] = Coordinate{X: point.Lon(), Y: point.Lat(), Z: 0}
+			coords[i] = Coordinate{X: point.Lon, Y: point.Lat, Z: point.Depth}
 		}
 		return coords, nil
 	default:
@@ -167,28 +167,28 @@ func convertGeoJSONGeometryToCoordinates(geom orb.Geometry) ([]Coordinate, error
 	}
 }
 
-// countCoordinates counts the number of coordinate points in a geometry
-func countCoordinates(geom orb.Geometry) int {
+// countCoordinates counts the number of coordinate points in a geometry.
+func countCoordinates(geom geojson.Geometry) int {
 	switch g := geom.(type) {
-	case orb.Point:
+	case geojson.Point:
 		return 1
-	case orb.LineString:
+	case geojson.LineString:
 		return len(g)
-	case orb.Polygon:
+	case geojson.Polygon:
 		total := 0
 		for _, ring := range g {
 			total += len(ring)
 		}
 		return total
-	case orb.MultiPoint:
+	case geojson.MultiPoint:
 		return len(g)
-	case orb.MultiLineString:
+	case geojson.MultiLineString:
 		total := 0
 		for _, line := range g {
 			total += len(line)
 		}
 		return total
-	case orb.MultiPolygon:
+	case geojson.MultiPolygon:
 		total := 0
 		for _, polygon := range g {
 			for _, ring := range polygon {
