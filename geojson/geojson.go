@@ -18,9 +18,11 @@ import (
 var (
 	errUnexpectedPointType       = errors.New("unexpected geometry type, expected Point")
 	errUnexpectedLineStringType  = errors.New("unexpected geometry type, expected LineString")
+	errUnexpectedPolygonType     = errors.New("unexpected geometry type, expected Polygon")
 	errInsufficientCoordinates   = errors.New("point requires at least 2 coordinates")
 	errUnsupportedScanType       = errors.New("cannot scan type into NullPoint")
 	errUnsupportedLineStringScan = errors.New("cannot scan type into NullLineString")
+	errUnsupportedPolygonScan    = errors.New("cannot scan type into NullPolygon")
 )
 
 // Point represents a 3D geographic point.
@@ -294,6 +296,212 @@ func (nls NullLineString) Equal(other NullLineString) bool {
 		if nls.LineString[i].Lon != other.LineString[i].Lon ||
 			nls.LineString[i].Lat != other.LineString[i].Lat ||
 			nls.LineString[i].Depth != other.LineString[i].Depth {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Ring represents a closed linear ring of 3D points.
+// Used as part of Polygon (exterior ring and holes).
+// The ring should be closed (first point equals last point).
+type Ring []Point
+
+// IsClosed returns true if the ring is closed (first point equals last point).
+func (r Ring) IsClosed() bool {
+	if len(r) < 2 {
+		return false
+	}
+
+	first := r[0]
+	last := r[len(r)-1]
+
+	return first.Lon == last.Lon && first.Lat == last.Lat && first.Depth == last.Depth
+}
+
+// Close returns a new ring with the first point appended if not already closed.
+// If the ring is already closed, returns the original ring.
+func (r Ring) Close() Ring {
+	if r.IsClosed() {
+		return r
+	}
+
+	if len(r) == 0 {
+		return r
+	}
+
+	closed := make(Ring, len(r)+1)
+	copy(closed, r)
+	closed[len(r)] = r[0]
+
+	return closed
+}
+
+// Equal compares two rings for equality.
+func (r Ring) Equal(other Ring) bool {
+	if len(r) != len(other) {
+		return false
+	}
+
+	for i := range r {
+		if r[i].Lon != other[i].Lon ||
+			r[i].Lat != other[i].Lat ||
+			r[i].Depth != other[i].Depth {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Polygon represents a polygon with optional holes.
+// The first ring is the exterior boundary, subsequent rings are holes.
+// All rings should be closed (first point equals last point).
+type Polygon []Ring
+
+// polygonJSON is the GeoJSON representation.
+type polygonJSON struct {
+	Type        string        `json:"type"`
+	Coordinates [][][]float64 `json:"coordinates"`
+}
+
+// MarshalJSON implements json.Marshaler.
+func (p Polygon) MarshalJSON() ([]byte, error) {
+	coords := make([][][]float64, len(p))
+
+	for i, ring := range p {
+		// Auto-close rings during marshaling
+		closedRing := ring.Close()
+		coords[i] = make([][]float64, len(closedRing))
+
+		for j, pt := range closedRing {
+			if pt.Depth != 0 {
+				coords[i][j] = []float64{pt.Lon, pt.Lat, pt.Depth}
+			} else {
+				coords[i][j] = []float64{pt.Lon, pt.Lat}
+			}
+		}
+	}
+
+	return json.Marshal(polygonJSON{
+		Type:        "Polygon",
+		Coordinates: coords,
+	})
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (p *Polygon) UnmarshalJSON(data []byte) error {
+	var pj polygonJSON
+
+	err := json.Unmarshal(data, &pj)
+	if err != nil {
+		return err
+	}
+
+	if pj.Type != "Polygon" {
+		return fmt.Errorf("%w: got %q", errUnexpectedPolygonType, pj.Type)
+	}
+
+	*p = make(Polygon, len(pj.Coordinates))
+
+	for i, ringCoords := range pj.Coordinates {
+		(*p)[i] = make(Ring, len(ringCoords))
+
+		for j, coord := range ringCoords {
+			if len(coord) < 2 {
+				return fmt.Errorf("%w: got %d", errInsufficientCoordinates, len(coord))
+			}
+
+			(*p)[i][j] = Point{
+				Lon: coord[0],
+				Lat: coord[1],
+			}
+
+			if len(coord) >= 3 {
+				(*p)[i][j].Depth = coord[2]
+			}
+		}
+	}
+
+	return nil
+}
+
+// NullPolygon represents a nullable Polygon for database storage.
+//
+//nolint:recvcheck // intentionally mixed receivers for interface compliance
+type NullPolygon struct {
+	Polygon Polygon
+	Valid   bool
+}
+
+// Scan implements sql.Scanner.
+func (np *NullPolygon) Scan(value any) error {
+	if value == nil {
+		np.Polygon = nil
+		np.Valid = false
+
+		return nil
+	}
+
+	var data []byte
+
+	switch v := value.(type) {
+	case []byte:
+		data = v
+	case string:
+		data = []byte(v)
+	default:
+		return fmt.Errorf("%w: %T", errUnsupportedPolygonScan, value)
+	}
+
+	if len(data) == 0 {
+		np.Polygon = nil
+		np.Valid = false
+
+		return nil
+	}
+
+	err := json.Unmarshal(data, &np.Polygon)
+	if err != nil {
+		return fmt.Errorf("unmarshaling polygon: %w", err)
+	}
+
+	np.Valid = true
+
+	return nil
+}
+
+// Value implements driver.Valuer.
+func (np NullPolygon) Value() (driver.Value, error) {
+	if !np.Valid {
+		return nil, nil //nolint:nilnil // driver.Valuer requires nil,nil for NULL
+	}
+
+	data, err := json.Marshal(np.Polygon)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling polygon: %w", err)
+	}
+
+	return string(data), nil
+}
+
+// Equal compares two NullPolygon values.
+func (np NullPolygon) Equal(other NullPolygon) bool {
+	if !np.Valid && !other.Valid {
+		return true
+	}
+
+	if np.Valid != other.Valid {
+		return false
+	}
+
+	if len(np.Polygon) != len(other.Polygon) {
+		return false
+	}
+
+	for i := range np.Polygon {
+		if !np.Polygon[i].Equal(other.Polygon[i]) {
 			return false
 		}
 	}
