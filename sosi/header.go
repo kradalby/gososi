@@ -34,14 +34,14 @@ func GenerateHeader(config SOSIConfig, bbox BoundingBox) string {
 	builder.WriteString(".HODE 0:\n")
 	builder.WriteString("..TEGNSETT UTF-8\n")
 	builder.WriteString("..TRANSPAR\n")
-	builder.WriteString(fmt.Sprintf("...KOORDSYS %d\n", config.CoordSystem))
+	fmt.Fprintf(&builder, "...KOORDSYS %d\n", config.CoordSystem)
 	builder.WriteString("...ORIGO-NØ 0 0\n")
-	builder.WriteString(fmt.Sprintf("...ENHET %s\n", sosiUnit))
-	builder.WriteString(fmt.Sprintf("...ENHET-H %s\n", sosiHeightUnit))
-	builder.WriteString(fmt.Sprintf("...ENHET-D %s\n", sosiHeightUnit))
-	builder.WriteString(fmt.Sprintf("..PRODUSENT \"%s\"\n", config.Producer))
-	builder.WriteString(fmt.Sprintf("..SOSI-VERSJON %s\n", config.Version))
-	builder.WriteString(fmt.Sprintf("..SOSI-NIVÅ %d\n", config.Level))
+	fmt.Fprintf(&builder, "...ENHET %s\n", sosiUnit)
+	fmt.Fprintf(&builder, "...ENHET-H %s\n", sosiHeightUnit)
+	fmt.Fprintf(&builder, "...ENHET-D %s\n", sosiHeightUnit)
+	fmt.Fprintf(&builder, "..PRODUSENT \"%s\"\n", config.Producer)
+	fmt.Fprintf(&builder, "..SOSI-VERSJON %s\n", config.Version)
+	fmt.Fprintf(&builder, "..SOSI-NIVÅ %d\n", config.Level)
 	builder.WriteString("..OMRÅDE\n")
 
 	// Format bounding box as integers (floor for min, ceil for max)
@@ -50,8 +50,8 @@ func GenerateHeader(config SOSIConfig, bbox BoundingBox) string {
 	maxLat := int(math.Ceil(bbox.MaxLat))
 	maxLon := int(math.Ceil(bbox.MaxLon))
 
-	builder.WriteString(fmt.Sprintf("...MIN-NØ %d %d\n", minLat, minLon))
-	builder.WriteString(fmt.Sprintf("...MAX-NØ %d %d\n", maxLat, maxLon))
+	fmt.Fprintf(&builder, "...MIN-NØ %d %d\n", minLat, minLon)
+	fmt.Fprintf(&builder, "...MAX-NØ %d %d\n", maxLat, maxLon)
 
 	return builder.String()
 }

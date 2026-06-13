@@ -18,8 +18,8 @@ func GenerateFeature(feature SOSIFeature, config SOSIConfig) string {
 	var builder strings.Builder
 
 	// Feature header: .[TYPE] [ID]:
-	builder.WriteString(fmt.Sprintf(".%s %d:\n", feature.Type, feature.ID))
-	builder.WriteString(fmt.Sprintf("..OBJTYPE %s\n", feature.ObjectType))
+	fmt.Fprintf(&builder, ".%s %d:\n", feature.Type, feature.ID)
+	fmt.Fprintf(&builder, "..OBJTYPE %s\n", feature.ObjectType)
 	builder.WriteString("..NØH\n")
 
 	// Transform and add coordinates
