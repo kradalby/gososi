@@ -14,7 +14,7 @@ import (
 
 func main() {
 	var outputFile string
-	
+
 	root := &command.C{
 		Name:  "geojson2sosi",
 		Usage: "input_file [output_file]",
@@ -33,7 +33,7 @@ func main() {
 
 			inputFile := args[0]
 			finalOutputFile := ""
-			
+
 			if len(args) >= 2 {
 				finalOutputFile = args[1]
 			} else if outputFile != "" {
@@ -49,7 +49,7 @@ func main() {
 
 			// Determine conversion direction based on file extension
 			inputExt := strings.ToLower(filepath.Ext(inputFile))
-			
+
 			switch inputExt {
 			case ".geojson", ".json":
 				return convertGeoJSONtoSOSI(inputFile, finalOutputFile)
@@ -134,7 +134,7 @@ func convertSOSItoGeoJSON(inputFile, outputFile string) error {
 func generateOutputFilename(inputFile string) string {
 	ext := strings.ToLower(filepath.Ext(inputFile))
 	base := strings.TrimSuffix(inputFile, ext)
-	
+
 	switch ext {
 	case ".geojson", ".json":
 		return base + ".sos"
@@ -196,12 +196,12 @@ func writeFile(data []byte, filePath string) error {
 	// Ensure output directory exists
 	dir := filepath.Dir(cleanPath)
 	if dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("failed to create output directory '%s': %w", dir, err)
 		}
 	}
 
-	err := os.WriteFile(cleanPath, data, 0644)
+	err := os.WriteFile(cleanPath, data, 0o644)
 	if err != nil {
 		return fmt.Errorf("failed to write file '%s': %w", cleanPath, err)
 	}

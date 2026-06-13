@@ -83,7 +83,7 @@ func AnalyzeGeoJSON(geojsonData []byte) (map[string]string, error) {
 
 		// Get geometry type
 		geomType := string(feature.Geometry.GeoJSONType())
-		
+
 		// Get label from properties
 		label := "unlabeled"
 		if labelProp, exists := feature.Properties["label"]; exists {

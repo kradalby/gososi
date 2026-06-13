@@ -21,8 +21,8 @@ func displayAnalysisSummary(analysis map[string]string) {
 		// Extract geometry type from description (format: "id: label GeometryType = X coords")
 		parts := strings.Fields(desc)
 		for _, part := range parts {
-			if strings.Contains(part, "Point") || strings.Contains(part, "LineString") || 
-			   strings.Contains(part, "Polygon") || strings.Contains(part, "Multi") {
+			if strings.Contains(part, "Point") || strings.Contains(part, "LineString") ||
+				strings.Contains(part, "Polygon") || strings.Contains(part, "Multi") {
 				geometryTypes[part]++
 				break
 			}
@@ -35,7 +35,7 @@ func displayAnalysisSummary(analysis map[string]string) {
 	for geomType, count := range geometryTypes {
 		types = append(types, fmt.Sprintf("%d %s", count, geomType))
 	}
-	
+
 	if len(types) > 0 {
 		fmt.Printf(" %s\n", strings.Join(types, ", "))
 	} else {
@@ -58,7 +58,7 @@ func promptForObjectTypes(analysis map[string]string) (map[string]string, error)
 	// Prompt for each feature
 	for _, featureID := range featureIDs {
 		featureInfo := analysis[featureID]
-		
+
 		for {
 			// Display feature information and prompt for object type
 			objectType, err := readLineWithPrompt(featureInfo)
@@ -82,7 +82,7 @@ func promptForObjectTypes(analysis map[string]string) (map[string]string, error)
 // readLineWithPrompt reads a line from stdin with a prompt message
 func readLineWithPrompt(message string) (string, error) {
 	fmt.Printf("%s\nObject type: ", message)
-	
+
 	scanner := bufio.NewScanner(os.Stdin)
 	if !scanner.Scan() {
 		if err := scanner.Err(); err != nil {
@@ -91,6 +91,6 @@ func readLineWithPrompt(message string) (string, error) {
 		// EOF reached
 		return "", fmt.Errorf("input terminated")
 	}
-	
+
 	return scanner.Text(), nil
 }

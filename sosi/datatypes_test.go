@@ -457,7 +457,7 @@ func convertNorwegianAttributes(properties map[string]interface{}) map[string]in
 		}
 
 		// Convert value based on field type
-		var convertedValue = value
+		convertedValue := value
 
 		if strValue, ok := value.(string); ok {
 			if dateFields[convertedKey] {

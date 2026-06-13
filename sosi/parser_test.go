@@ -133,7 +133,7 @@ func TestParser_QualityParsing(t *testing.T) {
 	// Check header quality - should now work properly
 	if len(doc.Header.Quality) > 0 {
 		t.Logf("Quality data: %+v", doc.Header.Quality)
-		
+
 		// Verify the expected values from testfile1.sos: "..KVALITET 11 300"
 		if målemetode := doc.Header.Quality["målemetode"]; målemetode != 11 {
 			t.Errorf("Expected målemetode=11, got %v", målemetode)
@@ -141,7 +141,7 @@ func TestParser_QualityParsing(t *testing.T) {
 		if nøyaktighet := doc.Header.Quality["nøyaktighet"]; nøyaktighet != 300 {
 			t.Errorf("Expected nøyaktighet=300, got %v", nøyaktighet)
 		}
-		
+
 		t.Log("✅ Header KVALITET parsing implemented and working")
 	} else {
 		t.Error("Header KVALITET parsing failed - Quality is nil or empty")

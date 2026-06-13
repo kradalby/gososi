@@ -824,10 +824,10 @@ type Feature struct {
 
 // featureJSON is the GeoJSON representation of a Feature.
 type featureJSON struct {
-	Type       string          `json:"type"`
-	ID         any             `json:"id,omitzero"`
-	Geometry   jsontext.Value  `json:"geometry"`
-	Properties map[string]any  `json:"properties"`
+	Type       string         `json:"type"`
+	ID         any            `json:"id,omitzero"`
+	Geometry   jsontext.Value `json:"geometry"`
+	Properties map[string]any `json:"properties"`
 }
 
 // NewFeature creates a new Feature with the given geometry.
