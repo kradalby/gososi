@@ -3,8 +3,8 @@ module github.com/kradalby/gososi
 go 1.26
 
 require (
-	github.com/creachadair/command v0.2.2
-	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433
+	github.com/creachadair/command v0.2.6
+	github.com/go-json-experiment/json v0.0.0-20260601182631-00ed12fed2a6
 	github.com/stretchr/testify v1.11.1
 )
 

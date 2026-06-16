@@ -25,7 +25,7 @@
           root = ./.;
           pname = "gososi";
           version = "0.0.1";
-          vendorHash = "sha256-c8ZatcH4hMg8Weoo90xrS8Q0wrEl8t6hScLxLooS4Y8=";
+          vendorHash = "sha256-JoRJnSaFKo0DXwPq76cL/o0afIHSjauJK7BxFsLl8j4=";
           goPkg = pkgs.go_1_26;
         };
       in
