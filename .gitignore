@@ -2,6 +2,13 @@ temp-*
 todo.txt
 cmd/geojson2sosi/geojson2sosi
 
+# Nix build results
+result
+result-*
+
+# Per-machine direnv overrides
+.envrc.local
+
 ### Go ###
 # If you prefer the allow list template instead of the deny list, see community template:
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
