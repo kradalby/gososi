@@ -37,7 +37,12 @@
 
         checks = {
           build = fc.goBuild common;
-          gotest = fc.goTest common;
+          # Nested testdata dirs aren't picked up by the pinned flake-checks
+          # source filter (only root ./testdata is); list them so fixtures
+          # reach the test sandbox instead of the tests silently skipping.
+          gotest = fc.goTest (common // {
+            extraSrc = [ ./sosi/testdata ./proj/testdata ];
+          });
           golangci-lint = fc.goLint common;
           formatting = fc.goFormat common;
         };
