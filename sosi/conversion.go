@@ -8,35 +8,6 @@ import (
 	"github.com/kradalby/gososi/geojson"
 )
 
-// GeoJSONtoSOSI converts GeoJSON data to SOSI format
-func GeoJSONtoSOSI(geojsonData []byte, objectTypes map[string]string) ([]byte, error) {
-	// Parse GeoJSON
-	fc, err := geojson.UnmarshalFeatureCollection(geojsonData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse GeoJSON: %w", err)
-	}
-
-	// Create SOSI builder with default config
-	builder := NewBuilder(DefaultConfig())
-
-	// Convert each feature
-	for i, feature := range fc.Features {
-		sosiFeature, err := convertGeoJSONFeatureToSOSI(feature, i+1, objectTypes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert feature %d: %w", i, err)
-		}
-		builder.AddFeature(sosiFeature)
-	}
-
-	// Build final SOSI string
-	sosiString, err := builder.Build()
-	if err != nil {
-		return nil, fmt.Errorf("failed to build SOSI: %w", err)
-	}
-
-	return []byte(sosiString), nil
-}
-
 // SOSItoGeoJSON converts SOSI data to GeoJSON format
 func SOSItoGeoJSON(sosiData []byte) ([]byte, error) {
 	// Parse SOSI
@@ -101,43 +72,6 @@ func AnalyzeGeoJSON(geojsonData []byte) (map[string]string, error) {
 	}
 
 	return analysis, nil
-}
-
-// convertGeoJSONFeatureToSOSI converts a single GeoJSON feature to SOSI
-func convertGeoJSONFeatureToSOSI(feature *geojson.Feature, id int, objectTypes map[string]string) (SOSIFeature, error) {
-	// Get feature ID - default to c[index] pattern
-	featureID := fmt.Sprintf("c%d", id-1)
-	if feature.ID != nil {
-		if idStr, ok := feature.ID.(string); ok {
-			featureID = idStr
-		}
-	}
-
-	objectType, exists := objectTypes[featureID]
-	if !exists {
-		return SOSIFeature{}, fmt.Errorf("no object type provided for feature %s", featureID)
-	}
-
-	// Convert geometry type
-	geomType := string(feature.Geometry.GeoJSONType())
-	sosiType, err := ConvertGeometryTypeToSOSI(geomType)
-	if err != nil {
-		return SOSIFeature{}, err
-	}
-
-	// Convert coordinates
-	coordinates, err := convertGeoJSONGeometryToCoordinates(feature.Geometry)
-	if err != nil {
-		return SOSIFeature{}, fmt.Errorf("failed to convert geometry: %w", err)
-	}
-
-	return SOSIFeature{
-		ID:          id,
-		Type:        sosiType,
-		ObjectType:  objectType,
-		Coordinates: coordinates,
-		Properties:  feature.Properties,
-	}, nil
 }
 
 // convertGeoJSONGeometryToCoordinates converts GeoJSON geometry to SOSI coordinates.
