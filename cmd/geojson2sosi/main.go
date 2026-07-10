@@ -13,7 +13,17 @@ import (
 )
 
 func main() {
-	var outputFile string
+	var (
+		outputFile  string
+		koordsys    int
+		vertDatum   string
+		sosiVersjon string
+		sosiNiva    int
+		producer    string
+		attrs       bool
+		latlonDec   int
+		altDec      int
+	)
 
 	root := &command.C{
 		Name:  "geojson2sosi",
@@ -23,6 +33,14 @@ func main() {
 		SetFlags: func(env *command.Env, fs *flag.FlagSet) {
 			fs.StringVar(&outputFile, "output", "", "Output file path (optional)")
 			fs.StringVar(&outputFile, "o", "", "Output file path (optional, shorthand)")
+			fs.IntVar(&koordsys, "koordsys", 0, "Target SOSI KOORDSYS code (21-26 UTM, 84 geographic; 0 = auto-select zone)")
+			fs.StringVar(&vertDatum, "vert-datum", "NN2000", "Vertical datum (empty to omit)")
+			fs.StringVar(&sosiVersjon, "sosi-versjon", "5.0", "SOSI version")
+			fs.IntVar(&sosiNiva, "sosi-niva", 4, "SOSI level")
+			fs.StringVar(&producer, "producer", "", "PRODUSENT string (empty to omit)")
+			fs.BoolVar(&attrs, "attrs", true, "Emit GeoJSON properties as SOSI attributes")
+			fs.IntVar(&latlonDec, "latlon-decimals", 2, "Decimal places for planar/lon-lat coordinates (ENHET)")
+			fs.IntVar(&altDec, "alt-decimals", 2, "Decimal places for height")
 		},
 
 		Run: func(env *command.Env) error {
@@ -52,7 +70,18 @@ func main() {
 
 			switch inputExt {
 			case ".geojson", ".json":
-				return convertGeoJSONtoSOSI(inputFile, finalOutputFile)
+				opts := []sosi.Option{
+					sosi.WithVertDatum(sosi.VertDatum(vertDatum)),
+					sosi.WithSOSIVersion(sosi.SOSIVersion(sosiVersjon)),
+					sosi.WithSOSILevel(sosi.SOSILevel(sosiNiva)),
+					sosi.WithProducer(producer),
+					sosi.WithAttributes(attrs),
+					sosi.WithAccuracy(latlonDec, altDec),
+				}
+				if koordsys != 0 {
+					opts = append(opts, sosi.WithKoordSys(sosi.KoordSys(koordsys)))
+				}
+				return convertGeoJSONtoSOSI(inputFile, finalOutputFile, opts...)
 			case ".sos", ".sosi":
 				return convertSOSItoGeoJSON(inputFile, finalOutputFile)
 			default:
@@ -66,7 +95,7 @@ func main() {
 }
 
 // convertGeoJSONtoSOSI handles GeoJSON to SOSI conversion
-func convertGeoJSONtoSOSI(inputFile, outputFile string) error {
+func convertGeoJSONtoSOSI(inputFile, outputFile string, opts ...sosi.Option) error {
 	fmt.Printf("Converting GeoJSON to SOSI: %s -> %s\n", inputFile, outputFile)
 
 	// Read GeoJSON file
@@ -91,7 +120,7 @@ func convertGeoJSONtoSOSI(inputFile, outputFile string) error {
 	}
 
 	// Convert to SOSI
-	sosiData, err := sosi.GeoJSONtoSOSI(geojsonData, objectTypes)
+	sosiData, err := sosi.GeoJSONToSOSI(geojsonData, objectTypes, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to convert to SOSI: %w", err)
 	}
