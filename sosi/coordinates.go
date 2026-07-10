@@ -13,24 +13,6 @@ func FormatCoordinateToSOSI(value float64, precision int) string {
 	return strings.Replace(formatted, ".", "", 1)
 }
 
-// TransformCoordinate converts SOSI coordinate to SOSI format "lat lon alt"
-// Note: Coordinate.X=longitude, Coordinate.Y=latitude, but SOSI expects latitude longitude
-func TransformCoordinate(coord Coordinate, config SOSIConfig) string {
-	// Format coordinates with proper precision and remove decimal points
-	lat := FormatCoordinateToSOSI(coord.Y, config.LatLongAccuracy) // Y = Latitude
-	lon := FormatCoordinateToSOSI(coord.X, config.LatLongAccuracy) // X = Longitude
-
-	// Default altitude to 0 if not provided, format with altitude accuracy
-	alt := coord.Z
-	if alt == 0 {
-		// Ensure we have proper zero padding for altitude
-		alt = 0.0
-	}
-	altFormatted := FormatCoordinateToSOSI(alt, config.AltitudeAccuracy)
-
-	return fmt.Sprintf("%s %s %s", lat, lon, altFormatted)
-}
-
 // ConvertCoordinate converts from public API coordinate format to internal coordinate format
 func ConvertCoordinate(lat, lon, alt float64) Coordinate {
 	return Coordinate{
@@ -38,15 +20,6 @@ func ConvertCoordinate(lat, lon, alt float64) Coordinate {
 		Y: lat, // Y = Latitude
 		Z: alt, // Z = Altitude
 	}
-}
-
-// TransformCoordinates converts a slice of coordinates to SOSI format strings
-func TransformCoordinates(coords []Coordinate, config SOSIConfig) []string {
-	result := make([]string, len(coords))
-	for i, coord := range coords {
-		result[i] = TransformCoordinate(coord, config)
-	}
-	return result
 }
 
 // CoordinateSystem represents a coordinate system with SRID and proj4 definition

@@ -1,35 +1,6 @@
 package sosi
 
-import (
-	"fmt"
-	"strings"
-)
-
-// Feature represents a SOSI feature with its properties and coordinates
-type Feature struct {
-	ID          int          // Feature ID
-	Type        string       // PUNKT, KURVE, SVERM
-	ObjectType  string       // User-defined object type
-	Coordinates []Coordinate // Feature coordinates
-}
-
-// GenerateFeature converts a SOSI feature to its string representation
-func GenerateFeature(feature SOSIFeature, config SOSIConfig) string {
-	var builder strings.Builder
-
-	// Feature header: .[TYPE] [ID]:
-	fmt.Fprintf(&builder, ".%s %d:\n", feature.Type, feature.ID)
-	fmt.Fprintf(&builder, "..OBJTYPE %s\n", feature.ObjectType)
-	builder.WriteString("..NØH\n")
-
-	// Transform and add coordinates
-	for _, coord := range feature.Coordinates {
-		coordString := TransformCoordinate(coord, config)
-		builder.WriteString(coordString + "\n")
-	}
-
-	return builder.String()
-}
+import "fmt"
 
 // ConvertGeometryTypeToSOSI maps GeoJSON geometry types to SOSI types
 func ConvertGeometryTypeToSOSI(geojsonType string) (string, error) {
