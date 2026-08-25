@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/creachadair/command"
+
 	"github.com/kradalby/gososi/sosi"
 )
 
