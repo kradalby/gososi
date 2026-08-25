@@ -1,19 +1,19 @@
 // Package geojson provides GeoJSON geometry types with 3D coordinate support.
 //
 // This package is based on github.com/paulmach/orb/geojson but with:
-// - Ergonomic struct-based Point type with named Lon, Lat, Depth fields
-// - Full 3D coordinate support (depth/altitude) on all geometry types
-// - Database integration via Null* types with sql.Scanner/driver.Valuer
-// - JSON-only serialization using json/v2 (no BSON)
+//   - Ergonomic struct-based Point type with named Lon, Lat, Depth fields
+//   - Full 3D coordinate support (depth/altitude) on all geometry types
+//   - Database integration via Null* types with sql.Scanner/driver.Valuer
+//   - JSON-only serialization using the standard library's encoding/json/v2
+//     (no BSON)
 package geojson
 
 import (
 	"database/sql/driver"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
-
-	"github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
 )
 
 var (

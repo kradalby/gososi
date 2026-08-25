@@ -19,15 +19,38 @@
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        # Everything Go here rides `go_latest` rather than a pinned `go_1_NN`,
+        # so the repo follows the newest toolchain nixpkgs ships without an
+        # edit every release. Bare `pkgs.go` lags a major behind, so the
+        # attribute has to be named explicitly.
+        goOverlay = _: prev: {
+          # Keep the tooling on the same toolchain as the build. go.mod targets
+          # 1.27 and these three are built against nixpkgs' default 1.26 —
+          # goimports in particular ships wrapped with a `go` on PATH, and when
+          # that `go` is older than the go.mod directive it tries to fetch a
+          # toolchain from inside the network-less check sandbox.
+          # golangci-lint and gopls already track go_latest upstream.
+          gofumpt = prev.gofumpt.override { buildGoModule = prev.buildGoLatestModule; };
+          gotestsum = prev.gotestsum.override { buildGoModule = prev.buildGoLatestModule; };
+          gotools = prev.gotools.override {
+            buildGoModule = prev.buildGoLatestModule;
+            go = prev.go_latest;
+          };
+        };
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ goOverlay ];
+        };
         fc = flake-checks.lib;
         common = {
           inherit pkgs;
           root = ./.;
           pname = "gososi";
           version = "0.0.1";
-          vendorHash = "sha256-JoRJnSaFKo0DXwPq76cL/o0afIHSjauJK7BxFsLl8j4=";
-          goPkg = pkgs.go_1_26;
+          vendorHash = "sha256-U4n57FbAZZ4afMDRexPBvoTgyauTWkohDZozW4WQp64=";
+          # flake-checks feeds this to `buildGoModule.override { go = goPkg; }`
+          # — which is exactly what buildGoLatestModule is.
+          goPkg = pkgs.go_latest;
         };
       in
       {
@@ -48,7 +71,7 @@
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [ go_1_26 golangci-lint gofumpt gotestsum gopls gotools prek ];
+          buildInputs = with pkgs; [ go_latest golangci-lint gofumpt gotestsum gopls gotools prek ];
         };
       }
     );
