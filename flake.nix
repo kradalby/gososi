@@ -10,11 +10,12 @@
   };
 
   outputs =
-    { self
-    , nixpkgs
-    , flake-utils
-    , flake-checks
-    , ...
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      flake-checks,
+      ...
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -63,15 +64,29 @@
           # Nested testdata dirs aren't picked up by the pinned flake-checks
           # source filter (only root ./testdata is); list them so fixtures
           # reach the test sandbox instead of the tests silently skipping.
-          gotest = fc.goTest (common // {
-            extraSrc = [ ./sosi/testdata ./proj/testdata ];
-          });
+          gotest = fc.goTest (
+            common
+            // {
+              extraSrc = [
+                ./sosi/testdata
+                ./proj/testdata
+              ];
+            }
+          );
           golangci-lint = fc.goLint common;
           formatting = fc.goFormat common;
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [ go_latest golangci-lint gofumpt gotestsum gopls gotools prek ];
+          buildInputs = with pkgs; [
+            go_latest
+            golangci-lint
+            gofumpt
+            gotestsum
+            gopls
+            gotools
+            prek
+          ];
         };
       }
     );
