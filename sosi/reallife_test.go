@@ -179,7 +179,7 @@ func TestRealLifeMemoryUsage(t *testing.T) {
 	filePath := "testdata/naturvernomraade.sos"
 
 	// Parse multiple times to test for memory leaks
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		file, err := os.Open(filePath)
 		if err != nil {
 			t.Skipf("Skipping memory test - file not found: %v", err)

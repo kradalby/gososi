@@ -203,7 +203,7 @@ func TestCompleteRoundtrip(t *testing.T) {
 			}
 
 			// Validate JSON structure
-			var result map[string]interface{}
+			var result map[string]any
 			if err := json.Unmarshal(jsonBytes, &result); err != nil {
 				t.Fatalf("Invalid JSON produced: %v", err)
 			}
@@ -212,7 +212,7 @@ func TestCompleteRoundtrip(t *testing.T) {
 				t.Errorf("JSON type: expected 'FeatureCollection', got %v", result["type"])
 			}
 
-			features, ok := result["features"].([]interface{})
+			features, ok := result["features"].([]any)
 			if !ok {
 				t.Fatal("JSON features not an array")
 			}
@@ -243,7 +243,7 @@ func TestCompleteRoundtrip(t *testing.T) {
 						}
 
 						// Validate KVALITET structure
-						if kvalitet, ok := feature.Properties["KVALITET"].(map[string]interface{}); ok {
+						if kvalitet, ok := feature.Properties["KVALITET"].(map[string]any); ok {
 							if kvalitet["målemetode"] != 82 {
 								t.Errorf("Point KVALITET målemetode: expected 82, got %v", kvalitet["målemetode"])
 							}
@@ -267,7 +267,7 @@ func TestCompleteRoundtrip(t *testing.T) {
 						}
 
 						// Validate REGISTRERINGSVERSJON structure
-						if regVer, ok := feature.Properties["REGISTRERINGSVERSJON"].(map[string]interface{}); ok {
+						if regVer, ok := feature.Properties["REGISTRERINGSVERSJON"].(map[string]any); ok {
 							if regVer["PRODUKT"] != "TestSuite 1.0" {
 								t.Errorf("Polygon REGISTRERINGSVERSJON PRODUKT: expected 'TestSuite 1.0', got %v", regVer["PRODUKT"])
 							}
@@ -309,11 +309,11 @@ func TestCompleteRoundtrip(t *testing.T) {
 				t.Log("Step 6: Validating complex geometry processing...")
 
 				// Find polygon with references (ID 300)
-				var refPolygon *map[string]interface{}
+				var refPolygon *map[string]any
 				for _, feature := range fc.Features {
 					if feature.Properties["sosi_id"] == 300 {
 						if geom := feature.Geometry; geom.GeoJSONType() == "Polygon" {
-							geoFeature := map[string]interface{}{
+							geoFeature := map[string]any{
 								"type":       "Feature",
 								"geometry":   geom,
 								"properties": feature.Properties,
@@ -331,11 +331,11 @@ func TestCompleteRoundtrip(t *testing.T) {
 				}
 
 				// Find arc converted to linestring (ID 400)
-				var arcLineString *map[string]interface{}
+				var arcLineString *map[string]any
 				for _, feature := range fc.Features {
 					if feature.Properties["sosi_id"] == 400 {
 						if geom := feature.Geometry; geom.GeoJSONType() == "LineString" {
-							geoFeature := map[string]interface{}{
+							geoFeature := map[string]any{
 								"type":       "Feature",
 								"geometry":   geom,
 								"properties": feature.Properties,
@@ -421,7 +421,7 @@ func TestRealWorldRoundtrip(t *testing.T) {
 	}
 
 	// Validate JSON structure
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(jsonBytes, &result); err != nil {
 		t.Fatalf("Invalid JSON from real-world data: %v", err)
 	}
@@ -431,7 +431,7 @@ func TestRealWorldRoundtrip(t *testing.T) {
 		t.Error("Real-world GeoJSON should be FeatureCollection")
 	}
 
-	features, ok := result["features"].([]interface{})
+	features, ok := result["features"].([]any)
 	if !ok || len(features) == 0 {
 		t.Error("Real-world GeoJSON should have features array")
 	}

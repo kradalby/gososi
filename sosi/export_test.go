@@ -279,7 +279,7 @@ func TestToGeoJSONSerialization(t *testing.T) {
 	}
 
 	// Verify it's valid JSON by unmarshaling
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(jsonBytes, &result); err != nil {
 		t.Fatalf("Invalid JSON produced: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestToGeoJSONSerialization(t *testing.T) {
 		t.Errorf("Expected type FeatureCollection, got %v", result["type"])
 	}
 
-	features, ok := result["features"].([]interface{})
+	features, ok := result["features"].([]any)
 	if !ok || len(features) != 1 {
 		t.Errorf("Expected 1 feature, got %v", len(features))
 	}

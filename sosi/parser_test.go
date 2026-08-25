@@ -99,8 +99,8 @@ func TestParser_HeaderParsing(t *testing.T) {
 
 	tests := []struct {
 		name string
-		got  interface{}
-		want interface{}
+		got  any
+		want any
 	}{
 		{"Producer", header.Producer, "SØRKART A/S"},
 		{"Owner", header.Owner, "Statens kartverk"},

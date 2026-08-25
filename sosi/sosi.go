@@ -6,14 +6,14 @@ import "fmt"
 // SOSIFeature represents a SOSI feature with its properties and coordinates
 // Extended to support both writing (existing) and parsing (new) functionality
 type SOSIFeature struct {
-	ID          int                    // Feature ID
-	Type        string                 // PUNKT, KURVE, FLATE, BUEP, SVERM
-	ObjectType  string                 // User-defined object type
-	Coordinates []Coordinate           // Feature coordinates
-	Properties  map[string]interface{} // Parsed attributes from SOSI (new for parsing)
-	Refs        []int                  // Feature references for FLATE geometries (new for parsing)
-	OuterRing   []int                  // Outer ring references for FLATE with holes (new for parsing)
-	Holes       [][]int                // Inner ring (hole) references for FLATE geometries (new for parsing)
+	ID          int            // Feature ID
+	Type        string         // PUNKT, KURVE, FLATE, BUEP, SVERM
+	ObjectType  string         // User-defined object type
+	Coordinates []Coordinate   // Feature coordinates
+	Properties  map[string]any // Parsed attributes from SOSI (new for parsing)
+	Refs        []int          // Feature references for FLATE geometries (new for parsing)
+	OuterRing   []int          // Outer ring references for FLATE with holes (new for parsing)
+	Holes       [][]int        // Inner ring (hole) references for FLATE geometries (new for parsing)
 }
 
 // BoundingBox represents the extent of a SOSI dataset
@@ -51,19 +51,19 @@ type SOSIDocument struct {
 
 // SOSIHeader represents parsed SOSI header information (HODE section)
 type SOSIHeader struct {
-	CharacterSet     string                 // TEGNSETT (e.g., "UTF-8")
-	Producer         string                 // PRODUSENT
-	Version          string                 // SOSI-VERSJON (e.g., "4.5")
-	Level            int                    // SOSI-NIVÅ
-	CoordSystem      int                    // KOORDSYS (e.g., 84 for WGS84)
-	GeosysParams     []string               // GEOSYS parameters if present
-	Unit             float64                // ENHET coordinate unit
-	HeightUnit       float64                // ENHET-H height unit
-	DepthUnit        float64                // ENHET-D depth unit
-	Origo            Coordinate             // ORIGO-NØ origin point
-	Owner            string                 // EIER
-	ObjectCatalog    string                 // OBJEKTKATALOG
-	VerificationDate string                 // VERIFISERINGSDATO
-	Quality          map[string]interface{} // KVALITET information
-	Area             BoundingBox            // OMRÅDE (MIN-NØ, MAX-NØ)
+	CharacterSet     string         // TEGNSETT (e.g., "UTF-8")
+	Producer         string         // PRODUSENT
+	Version          string         // SOSI-VERSJON (e.g., "4.5")
+	Level            int            // SOSI-NIVÅ
+	CoordSystem      int            // KOORDSYS (e.g., 84 for WGS84)
+	GeosysParams     []string       // GEOSYS parameters if present
+	Unit             float64        // ENHET coordinate unit
+	HeightUnit       float64        // ENHET-H height unit
+	DepthUnit        float64        // ENHET-D depth unit
+	Origo            Coordinate     // ORIGO-NØ origin point
+	Owner            string         // EIER
+	ObjectCatalog    string         // OBJEKTKATALOG
+	VerificationDate string         // VERIFISERINGSDATO
+	Quality          map[string]any // KVALITET information
+	Area             BoundingBox    // OMRÅDE (MIN-NØ, MAX-NØ)
 }

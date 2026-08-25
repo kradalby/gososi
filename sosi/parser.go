@@ -195,8 +195,8 @@ func (p *Parser) getKey(line string, parentLevel int) (string, error) {
 // getKeyFromLine extracts the key portion from a line
 // Equivalent to JavaScript getKeyFromLine function (util.js:14)
 func (p *Parser) getKeyFromLine(line string) string {
-	if idx := strings.Index(line, ":"); idx != -1 {
-		return strings.TrimSpace(line[:idx])
+	if before, _, ok := strings.Cut(line, ":"); ok {
+		return strings.TrimSpace(before)
 	}
 
 	// Split on first space and return first part
@@ -282,14 +282,14 @@ func (p *Parser) parseHeader(hodeData []string) (SOSIHeader, error) {
 		if kvalitetStr, ok := kvalitetData.(string); ok {
 			// Handle KVALITET as string (needs parsing)
 			header.Quality = p.parseKvalitet(kvalitetStr)
-		} else if kvalitetMap, ok := kvalitetData.(map[string]interface{}); ok {
+		} else if kvalitetMap, ok := kvalitetData.(map[string]any); ok {
 			// Handle KVALITET as pre-parsed map from tree parsing
 			header.Quality = kvalitetMap
 		}
 	}
 
 	// Parse TRANSPAR section
-	if transpar, ok := headerMap["TRANSPAR"].(map[string]interface{}); ok {
+	if transpar, ok := headerMap["TRANSPAR"].(map[string]any); ok {
 		header.CoordSystem = p.getInt(transpar, "KOORDSYS", 84)
 		header.Unit = p.getFloat(transpar, "ENHET", 1.0)
 		header.HeightUnit = p.getFloat(transpar, "ENHET-H", header.Unit)
@@ -302,7 +302,7 @@ func (p *Parser) parseHeader(hodeData []string) (SOSIHeader, error) {
 	}
 
 	// Parse OMRÅDE section
-	if omrade, ok := headerMap["OMRÅDE"].(map[string]interface{}); ok {
+	if omrade, ok := headerMap["OMRÅDE"].(map[string]any); ok {
 		header.Area = p.parseBoundingBox(omrade)
 	}
 
@@ -311,13 +311,13 @@ func (p *Parser) parseHeader(hodeData []string) (SOSIHeader, error) {
 
 // parseFromLevel2 parses level-2 hierarchical SOSI data
 // Equivalent to JavaScript parseFromLevel2 function (util.js:165)
-func (p *Parser) parseFromLevel2(lines []string) (map[string]interface{}, error) {
+func (p *Parser) parseFromLevel2(lines []string) (map[string]any, error) {
 	tree, err := p.parseTree(lines, 2)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 
 	for key, values := range tree {
 		if len(values) == 0 {
@@ -345,7 +345,7 @@ func (p *Parser) parseFromLevel2(lines []string) (map[string]interface{}, error)
 			result[key] = p.convertDataType(key, values[0])
 		} else {
 			// Multiple values - keep as array
-			converted := make([]interface{}, len(values))
+			converted := make([]any, len(values))
 			for i, value := range values {
 				converted[i] = p.convertDataType(key, value)
 			}
@@ -358,13 +358,13 @@ func (p *Parser) parseFromLevel2(lines []string) (map[string]interface{}, error)
 
 // parseSubdict parses sub-dictionary structures at level 3
 // Equivalent to JavaScript parseSubdict function (util.js:150)
-func (p *Parser) parseSubdict(lines []string) (map[string]interface{}, error) {
+func (p *Parser) parseSubdict(lines []string) (map[string]any, error) {
 	tree, err := p.parseTree(lines, 3)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 	for key, values := range tree {
 		if len(values) > 0 {
 			result[key] = p.convertDataType(key, values[0])
@@ -375,7 +375,7 @@ func (p *Parser) parseSubdict(lines []string) (map[string]interface{}, error) {
 }
 
 // Helper functions for data extraction
-func (p *Parser) getString(data map[string]interface{}, key, defaultValue string) string {
+func (p *Parser) getString(data map[string]any, key, defaultValue string) string {
 	if val, ok := data[key]; ok {
 		switch v := val.(type) {
 		case string:
@@ -390,7 +390,7 @@ func (p *Parser) getString(data map[string]interface{}, key, defaultValue string
 	return defaultValue
 }
 
-func (p *Parser) getInt(data map[string]interface{}, key string, defaultValue int) int {
+func (p *Parser) getInt(data map[string]any, key string, defaultValue int) int {
 	if val, ok := data[key]; ok {
 		switch v := val.(type) {
 		case int:
@@ -406,7 +406,7 @@ func (p *Parser) getInt(data map[string]interface{}, key string, defaultValue in
 	return defaultValue
 }
 
-func (p *Parser) getFloat(data map[string]interface{}, key string, defaultValue float64) float64 {
+func (p *Parser) getFloat(data map[string]any, key string, defaultValue float64) float64 {
 	if val, ok := data[key]; ok {
 		switch v := val.(type) {
 		case float64:
@@ -424,7 +424,7 @@ func (p *Parser) getFloat(data map[string]interface{}, key string, defaultValue 
 
 // convertDataType converts a string value to its appropriate Go type
 // Enhanced implementation with SOSI data type support
-func (p *Parser) convertDataType(key, value string) interface{} {
+func (p *Parser) convertDataType(key, value string) any {
 	// Special handling for KVALITET attributes
 	if key == "KVALITET" {
 		return p.parseKvalitet(value)
@@ -468,9 +468,9 @@ func (p *Parser) convertDataType(key, value string) interface{} {
 // parseKvalitet parses KVALITET attribute values into structured data
 // KVALITET format: "målemetode [nøyaktighet] [måleskala] [*] [*]"
 // Example: "82" -> {målemetode: 82}, "40 58" -> {målemetode: 40, nøyaktighet: 58}
-func (p *Parser) parseKvalitet(value string) map[string]interface{} {
+func (p *Parser) parseKvalitet(value string) map[string]any {
 	fields := strings.Fields(value)
-	kvalitet := make(map[string]interface{})
+	kvalitet := make(map[string]any)
 
 	if len(fields) >= 1 {
 		// Parse measurement method (målemetode) - always present
@@ -502,8 +502,8 @@ func (p *Parser) parseKvalitet(value string) map[string]interface{} {
 // parseRegistreringsversjon parses REGISTRERINGSVERSJON attribute values
 // REGISTRERINGSVERSJON format: "system" "version"
 // Example: "FKB" "3.4 eller eldre" -> {system: "FKB", versjon: "3.4 eller eldre"}
-func (p *Parser) parseRegistreringsversjon(value string) map[string]interface{} {
-	regVers := make(map[string]interface{})
+func (p *Parser) parseRegistreringsversjon(value string) map[string]any {
+	regVers := make(map[string]any)
 
 	// Parse quoted strings from the value
 	var parts []string
@@ -562,7 +562,7 @@ func (p *Parser) parseOrigo(origoStr string) Coordinate {
 }
 
 // parseBoundingBox parses the OMRÅDE section into a bounding box
-func (p *Parser) parseBoundingBox(omrade map[string]interface{}) BoundingBox {
+func (p *Parser) parseBoundingBox(omrade map[string]any) BoundingBox {
 	bbox := BoundingBox{}
 
 	if minStr := p.getString(omrade, "MIN-NØ", ""); minStr != "" {
@@ -657,7 +657,7 @@ func (p *Parser) parseFeature(key string, lines []string, header SOSIHeader) (SO
 	feature := SOSIFeature{
 		ID:         id,
 		Type:       geometryType,
-		Properties: make(map[string]interface{}),
+		Properties: make(map[string]any),
 		Refs:       []int{},
 	}
 
@@ -690,7 +690,7 @@ func (p *Parser) parseFeature(key string, lines []string, header SOSIHeader) (SO
 }
 
 // parseGeometry parses geometry data for a feature
-func (p *Parser) parseGeometry(feature *SOSIFeature, data map[string]interface{}, header SOSIHeader) error {
+func (p *Parser) parseGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
 	switch feature.Type {
 	case "PUNKT":
 		return p.parsePointGeometry(feature, data, header)
@@ -709,7 +709,7 @@ func (p *Parser) parseGeometry(feature *SOSIFeature, data map[string]interface{}
 }
 
 // parsePointGeometry parses PUNKT (Point) geometry
-func (p *Parser) parsePointGeometry(feature *SOSIFeature, data map[string]interface{}, header SOSIHeader) error {
+func (p *Parser) parsePointGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
 	// Look for NØ or NØH (coordinates)
 	coordKeys := []string{"NØ", "NØH"}
 
@@ -723,7 +723,7 @@ func (p *Parser) parsePointGeometry(feature *SOSIFeature, data map[string]interf
 				}
 				feature.Coordinates = []Coordinate{coord}
 				return nil
-			case []interface{}:
+			case []any:
 				// Handle multiple coordinate lines
 				if len(coords) > 0 {
 					if coordStr, ok := coords[0].(string); ok {
@@ -743,7 +743,7 @@ func (p *Parser) parsePointGeometry(feature *SOSIFeature, data map[string]interf
 }
 
 // parseLineStringGeometry parses KURVE (LineString) geometry
-func (p *Parser) parseLineStringGeometry(feature *SOSIFeature, data map[string]interface{}, header SOSIHeader) error {
+func (p *Parser) parseLineStringGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
 	// Look for NØ or NØH (coordinates)
 	coordKeys := []string{"NØ", "NØH"}
 
@@ -753,7 +753,7 @@ func (p *Parser) parseLineStringGeometry(feature *SOSIFeature, data map[string]i
 	for _, key := range coordKeys {
 		if coordData, ok := data[key]; ok {
 			switch coords := coordData.(type) {
-			case []interface{}:
+			case []any:
 				for _, coordInterface := range coords {
 					if coordStr, ok := coordInterface.(string); ok {
 						coord, err := p.parseCoordinate(coordStr, header)
@@ -780,7 +780,7 @@ func (p *Parser) parseLineStringGeometry(feature *SOSIFeature, data map[string]i
 }
 
 // parsePolygonGeometry parses FLATE (Polygon) geometry
-func (p *Parser) parsePolygonGeometry(feature *SOSIFeature, data map[string]interface{}, header SOSIHeader) error {
+func (p *Parser) parsePolygonGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
 	// FLATE geometries are defined by references to other features (REF)
 	// REF can be a single string or array of strings (multi-line REF)
 	if refData, ok := data["REF"]; ok {
@@ -790,7 +790,7 @@ func (p *Parser) parsePolygonGeometry(feature *SOSIFeature, data map[string]inte
 		case string:
 			// Single REF line
 			allRefStrings = []string{refs}
-		case []interface{}:
+		case []any:
 			// Multiple REF lines
 			for _, ref := range refs {
 				if refStr, ok := ref.(string); ok {
@@ -843,7 +843,7 @@ func (p *Parser) parsePolygonGeometry(feature *SOSIFeature, data map[string]inte
 	for _, key := range coordKeys {
 		if coordData, ok := data[key]; ok {
 			switch coords := coordData.(type) {
-			case []interface{}:
+			case []any:
 				// Multiple coordinate lines
 				for _, coordInterface := range coords {
 					if coordStr, ok := coordInterface.(string); ok {
@@ -870,7 +870,7 @@ func (p *Parser) parsePolygonGeometry(feature *SOSIFeature, data map[string]inte
 }
 
 // parseArcGeometry parses BUEP (Arc) geometry
-func (p *Parser) parseArcGeometry(feature *SOSIFeature, data map[string]interface{}, header SOSIHeader) error {
+func (p *Parser) parseArcGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
 	// BUEP requires 3 points to define the arc
 	// Look for NØ or NØH (coordinates)
 	coordKeys := []string{"NØ", "NØH"}
@@ -878,7 +878,7 @@ func (p *Parser) parseArcGeometry(feature *SOSIFeature, data map[string]interfac
 	for _, key := range coordKeys {
 		if coordData, ok := data[key]; ok {
 			switch coords := coordData.(type) {
-			case []interface{}:
+			case []any:
 				// BUEP must have exactly 3 coordinate points
 				if len(coords) != 3 {
 					return fmt.Errorf("BUEP requires exactly 3 points, got %d", len(coords))
@@ -966,8 +966,8 @@ func (p *Parser) parseReferences(refStr string) ([]int, error) {
 	var refs []int
 
 	// Split on spaces and parse each reference
-	parts := strings.Fields(strings.TrimSpace(refStr))
-	for _, part := range parts {
+	parts := strings.FieldsSeq(strings.TrimSpace(refStr))
+	for part := range parts {
 		// Skip parentheses - they indicate hole references which are handled separately
 		if strings.HasPrefix(part, "(") || strings.HasSuffix(part, ")") {
 			continue

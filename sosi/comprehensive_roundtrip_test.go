@@ -267,7 +267,7 @@ func TestComprehensiveRoundtrip(t *testing.T) {
 			}
 
 			// Validate JSON structure
-			var result map[string]interface{}
+			var result map[string]any
 			if err := json.Unmarshal(jsonBytes, &result); err != nil {
 				t.Fatalf("Invalid JSON produced: %v", err)
 			}
@@ -276,7 +276,7 @@ func TestComprehensiveRoundtrip(t *testing.T) {
 				t.Errorf("JSON type: expected FeatureCollection, got %v", result["type"])
 			}
 
-			features, ok := result["features"].([]interface{})
+			features, ok := result["features"].([]any)
 			if !ok {
 				t.Fatal("JSON features not an array")
 			}
@@ -464,7 +464,7 @@ func TestRoundtripDataIntegrity(t *testing.T) {
 			}
 
 			// Check KVALITET structure
-			if kvalitet, ok := feature.Properties["KVALITET"].(map[string]interface{}); ok {
+			if kvalitet, ok := feature.Properties["KVALITET"].(map[string]any); ok {
 				if kvalitet["målemetode"] != 82 {
 					t.Errorf("KVALITET målemetode integrity: expected 82, got %v", kvalitet["målemetode"])
 				}

@@ -19,8 +19,7 @@ func displayAnalysisSummary(analysis map[string]string) {
 	geometryTypes := make(map[string]int)
 	for _, desc := range analysis {
 		// Extract geometry type from description (format: "id: label GeometryType = X coords")
-		parts := strings.Fields(desc)
-		for _, part := range parts {
+		for part := range strings.FieldsSeq(desc) {
 			if strings.Contains(part, "Point") || strings.Contains(part, "LineString") ||
 				strings.Contains(part, "Polygon") || strings.Contains(part, "Multi") {
 				geometryTypes[part]++

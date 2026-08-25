@@ -138,7 +138,7 @@ func TestIssue2ExportFunctionality(t *testing.T) {
 				}
 
 				// Validate JSON structure
-				var result map[string]interface{}
+				var result map[string]any
 				if err := json.Unmarshal(jsonBytes, &result); err != nil {
 					t.Fatalf("Invalid GeoJSON produced: %v", err)
 				}
@@ -196,7 +196,7 @@ func TestGeoJSONPropertyMapping(t *testing.T) {
 	feature := fc.Features[0]
 
 	// Test standard SOSI property mappings
-	expectedProps := map[string]interface{}{
+	expectedProps := map[string]any{
 		"sosi_id":      100,
 		"objtype":      "TestPoint",
 		"coord_system": 25,
@@ -218,7 +218,7 @@ func TestGeoJSONPropertyMapping(t *testing.T) {
 	if kvalitet, exists := feature.Properties["KVALITET"]; !exists {
 		t.Error("KVALITET property missing")
 	} else {
-		if kvalitetMap, ok := kvalitet.(map[string]interface{}); ok {
+		if kvalitetMap, ok := kvalitet.(map[string]any); ok {
 			if målemetode := kvalitetMap["målemetode"]; målemetode != 82 {
 				t.Errorf("KVALITET målemetode: expected 82, got %v", målemetode)
 			}

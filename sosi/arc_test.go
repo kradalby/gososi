@@ -253,7 +253,7 @@ func TestArcAttributes(t *testing.T) {
 
 	// Test KOPIDATA parsing (nested structure)
 	if kopidata, exists := feature.Properties["KOPIDATA"]; exists {
-		if kopidataMap, ok := kopidata.(map[string]interface{}); ok {
+		if kopidataMap, ok := kopidata.(map[string]any); ok {
 			if områdeid, exists := kopidataMap["OMRÅDEID"]; !exists {
 				t.Error("OMRÅDEID not found in kopidata")
 			} else {

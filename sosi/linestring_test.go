@@ -240,7 +240,7 @@ func TestLineStringAttributes(t *testing.T) {
 
 	// Test nested kvalitet attributes (from JavaScript test)
 	if kvalitetRaw, exists := feature.Properties["KVALITET"]; exists {
-		if kvalitet, ok := kvalitetRaw.(map[string]interface{}); ok {
+		if kvalitet, ok := kvalitetRaw.(map[string]any); ok {
 			if målemetode, exists := kvalitet["målemetode"]; !exists {
 				t.Error("målemetode not found in kvalitet")
 			} else if målemetode != 40 {

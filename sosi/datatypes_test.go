@@ -45,7 +45,7 @@ func TestDataTypeConversion(t *testing.T) {
 		wantUpdateDate      string
 		wantDataCaptureDate string
 		wantKvalitet        int
-		wantOmrådeid        interface{} // Can be string or int
+		wantOmrådeid        any // Can be string or int
 	}{
 		{
 			name:                "basic data type conversion",
@@ -118,7 +118,7 @@ func TestDataTypeConversion(t *testing.T) {
 
 			// Test KVALITET parsing (should be parsed as structured data)
 			if kvalitet, exists := feature.Properties["KVALITET"]; exists {
-				if kvalitetMap, ok := kvalitet.(map[string]interface{}); ok {
+				if kvalitetMap, ok := kvalitet.(map[string]any); ok {
 					if målemetode, exists := kvalitetMap["målemetode"]; exists {
 						if målemetodeInt, ok := målemetode.(int); ok {
 							if målemetodeInt != tt.wantKvalitet {
@@ -139,7 +139,7 @@ func TestDataTypeConversion(t *testing.T) {
 
 			// Test nested KOPIDATA structure
 			if kopidata, exists := feature.Properties["KOPIDATA"]; exists {
-				if kopidataMap, ok := kopidata.(map[string]interface{}); ok {
+				if kopidataMap, ok := kopidata.(map[string]any); ok {
 					if områdeid, exists := kopidataMap["OMRÅDEID"]; exists {
 						// OMRÅDEID can be either string "0618" or integer 618
 						switch v := områdeid.(type) {
@@ -327,7 +327,7 @@ func TestStringToNumericConversion(t *testing.T) {
 		name          string
 		input         string
 		wantType      string
-		wantValue     interface{}
+		wantValue     any
 		shouldConvert bool
 	}{
 		{
@@ -401,7 +401,7 @@ func TestStringToNumericConversion(t *testing.T) {
 }
 
 // convertStringToNumeric attempts to convert a string to appropriate numeric type
-func convertStringToNumeric(s string) (interface{}, bool) {
+func convertStringToNumeric(s string) (any, bool) {
 	// Try integer conversion
 	if intVal, err := strconv.Atoi(s); err == nil {
 		return intVal, true
@@ -418,12 +418,12 @@ func convertStringToNumeric(s string) (interface{}, bool) {
 
 // convertNorwegianAttributes converts Norwegian SOSI attributes to international equivalents
 // with proper data type conversions
-func convertNorwegianAttributes(properties map[string]interface{}) map[string]interface{} {
+func convertNorwegianAttributes(properties map[string]any) map[string]any {
 	if properties == nil {
 		return nil
 	}
 
-	converted := make(map[string]interface{})
+	converted := make(map[string]any)
 
 	// Norwegian to international attribute name mappings
 	nameMapping := map[string]string{
