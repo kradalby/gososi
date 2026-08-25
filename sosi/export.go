@@ -2,6 +2,8 @@ package sosi
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/kradalby/gososi/geojson"
 )
@@ -52,7 +54,7 @@ func convertSOSIFeatureToGeoJSON(feature *SOSIFeature, header *SOSIHeader) (*geo
 
 	// Add SOSI-specific properties
 	if geoFeature.Properties == nil {
-		geoFeature.Properties = make(map[string]interface{})
+		geoFeature.Properties = make(map[string]any)
 	}
 
 	// Add feature ID
@@ -65,9 +67,7 @@ func convertSOSIFeatureToGeoJSON(feature *SOSIFeature, header *SOSIHeader) (*geo
 
 	// Add parsed properties from SOSI
 	if feature.Properties != nil {
-		for key, value := range feature.Properties {
-			geoFeature.Properties[key] = value
-		}
+		maps.Copy(geoFeature.Properties, feature.Properties)
 	}
 
 	// Add coordinate system information from header
@@ -200,7 +200,7 @@ func convertSOSIFeatureWithReferences(feature *SOSIFeature, header *SOSIHeader, 
 
 	// Add SOSI-specific properties
 	if geoFeature.Properties == nil {
-		geoFeature.Properties = make(map[string]interface{})
+		geoFeature.Properties = make(map[string]any)
 	}
 
 	// Add feature ID
@@ -213,9 +213,7 @@ func convertSOSIFeatureWithReferences(feature *SOSIFeature, header *SOSIHeader, 
 
 	// Add parsed properties from SOSI
 	if feature.Properties != nil {
-		for key, value := range feature.Properties {
-			geoFeature.Properties[key] = value
-		}
+		maps.Copy(geoFeature.Properties, feature.Properties)
 	}
 
 	// Add coordinate system information
@@ -307,8 +305,8 @@ func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (geojs
 			coords := refFeature.Coordinates
 			if refID < 0 {
 				// Reverse coordinate order for negative references
-				for i := len(coords) - 1; i >= 0; i-- {
-					ring = append(ring, geojson.Point{Lon: coords[i].X, Lat: coords[i].Y, Depth: coords[i].Z})
+				for _, coord := range slices.Backward(coords) {
+					ring = append(ring, geojson.Point{Lon: coord.X, Lat: coord.Y, Depth: coord.Z})
 				}
 			} else {
 				// Normal order for positive references
@@ -329,8 +327,8 @@ func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (geojs
 				outerRing := polygon[0]
 				if refID < 0 {
 					// Reverse ring direction for negative references
-					for i := len(outerRing) - 1; i >= 0; i-- {
-						ring = append(ring, outerRing[i])
+					for _, pt := range slices.Backward(outerRing) {
+						ring = append(ring, pt)
 					}
 				} else {
 					// Normal ring direction for positive references

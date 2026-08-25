@@ -236,7 +236,7 @@ func TestPolygonAttributes(t *testing.T) {
 
 	// Test KVALITET parsing (different from KURVE - single value)
 	if kvalitetRaw, exists := feature.Properties["KVALITET"]; exists {
-		if kvalitet, ok := kvalitetRaw.(map[string]interface{}); ok {
+		if kvalitet, ok := kvalitetRaw.(map[string]any); ok {
 			if målemetode, exists := kvalitet["målemetode"]; !exists {
 				t.Error("målemetode not found in kvalitet")
 			} else if målemetode != 82 {
@@ -252,7 +252,7 @@ func TestPolygonAttributes(t *testing.T) {
 
 	// Test REGISTRERINGSVERSJON parsing
 	if regVersRaw, exists := feature.Properties["REGISTRERINGSVERSJON"]; exists {
-		if regVers, ok := regVersRaw.(map[string]interface{}); ok {
+		if regVers, ok := regVersRaw.(map[string]any); ok {
 			if versjon, exists := regVers["versjon"]; !exists {
 				t.Error("versjon not found in registreringsversjon")
 			} else if versjon != "3.4 eller eldre" {
