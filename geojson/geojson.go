@@ -857,12 +857,16 @@ func (f Feature) MarshalJSON() ([]byte, error) {
 		props = make(map[string]any)
 	}
 
+	// Properties is a map, and json/v2 emits map entries in Go map iteration
+	// order, so without this the same Feature serialises to different bytes on
+	// every run. A format converter's output has to be reproducible — stable
+	// diffs, cacheable results, golden tests — so sort the keys.
 	return json.Marshal(featureJSON{
 		Type:       "Feature",
 		ID:         f.ID,
 		Geometry:   geomData,
 		Properties: props,
-	})
+	}, json.Deterministic(true))
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
