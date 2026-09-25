@@ -8,6 +8,6 @@ require (
 )
 
 require (
-	github.com/creachadair/mds v0.30.5 // indirect
+	github.com/creachadair/mds v0.31.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 )

@@ -50,7 +50,7 @@
           root = ./.;
           pname = "gososi";
           version = "0.0.1";
-          vendorHash = "sha256-U4n57FbAZZ4afMDRexPBvoTgyauTWkohDZozW4WQp64=";
+          vendorHash = "sha256-+5uibNyJRLWlE0hE55NCOZ3zbucrbtr64Emtr8x125Q=";
           # flake-checks feeds this to `buildGoModule.override { go = goPkg; }`
           # — which is exactly what buildGoLatestModule is.
           goPkg = pkgs.go_latest;
