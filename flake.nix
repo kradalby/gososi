@@ -17,7 +17,9 @@
       flake-checks,
       ...
     }:
-    flake-utils.lib.eachDefaultSystem (
+    # eachDefaultSystem still lists x86_64-darwin, which nixpkgs 26.11 dropped:
+    # evaluating any output for it throws.
+    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ] (
       system:
       let
         # Everything Go here rides `go_latest` rather than a pinned `go_1_NN`,
