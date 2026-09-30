@@ -7,13 +7,14 @@ type Ellipsoid struct {
 	F float64 // flattening
 }
 
-// Reference ellipsoids. WGS84 and GRS80 differ only in flattening, by less than
-// 0.1 mm on the ground; both are provided so callers can match a specific datum
-// definition exactly.
-var (
-	WGS84 = Ellipsoid{A: 6378137.0, F: 1.0 / 298.257223563}
-	GRS80 = Ellipsoid{A: 6378137.0, F: 1.0 / 298.257222101}
-)
+// WGS84 returns the WGS84 reference ellipsoid. It and GRS80 differ only in
+// flattening, by less than 0.1 mm on the ground; both are provided so callers
+// can match a specific datum definition exactly. They are functions rather than
+// variables so no importer can redefine an ellipsoid for the whole process.
+func WGS84() Ellipsoid { return Ellipsoid{A: 6378137.0, F: 1.0 / 298.257223563} }
+
+// GRS80 returns the GRS80 reference ellipsoid.
+func GRS80() Ellipsoid { return Ellipsoid{A: 6378137.0, F: 1.0 / 298.257222101} }
 
 // thirdFlattening returns n = f / (2 - f), the parameter the Krüger series is
 // expressed in.

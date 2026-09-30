@@ -8,14 +8,17 @@ import "math"
 // method used by GeographicLib, PROJ's etmerc and Kartverket, accurate to a few
 // nanometres within a few degrees of the central meridian and to sub-millimetre
 // well beyond a UTM zone's nominal width.
+//
+// The parameters are fixed at construction because the series coefficients are
+// derived from them; build one with NewTransverseMercator or UTM. The zero value
+// is not usable.
 type TransverseMercator struct {
-	Ell    Ellipsoid
-	Lon0   float64 // central meridian, degrees
-	K0     float64 // scale factor on the central meridian
-	FalseE float64 // false easting, metres
-	FalseN float64 // false northing, metres
+	lon0   float64 // central meridian, degrees
+	k0     float64 // scale factor on the central meridian
+	falseE float64 // false easting, metres
+	falseN float64 // false northing, metres
 
-	// Precomputed series coefficients (derived from Ell in NewTransverseMercator).
+	// Precomputed series coefficients (derived from the ellipsoid).
 	n     float64
 	bigA  float64    // rectifying radius * k0-independent factor
 	alpha [7]float64 // forward coefficients, index 1..6
@@ -27,11 +30,10 @@ type TransverseMercator struct {
 // its series coefficients.
 func NewTransverseMercator(ell Ellipsoid, lon0, k0, falseE, falseN float64) *TransverseMercator {
 	t := &TransverseMercator{
-		Ell:    ell,
-		Lon0:   lon0,
-		K0:     k0,
-		FalseE: falseE,
-		FalseN: falseN,
+		lon0:   lon0,
+		k0:     k0,
+		falseE: falseE,
+		falseN: falseN,
 	}
 
 	n := ell.thirdFlattening()
@@ -77,7 +79,7 @@ func NewTransverseMercator(ell Ellipsoid, lon0, k0, falseE, falseN float64) *Tra
 func (t *TransverseMercator) Forward(lon, lat float64) (easting, northing float64) {
 	phi := lat * math.Pi / 180
 	// Longitude relative to the central meridian, normalised to (-180, 180].
-	dl := math.Mod(lon-t.Lon0, 360)
+	dl := math.Mod(lon-t.lon0, 360)
 	if dl > 180 {
 		dl -= 360
 	} else if dl < -180 {
@@ -100,16 +102,16 @@ func (t *TransverseMercator) Forward(lon, lat float64) (easting, northing float6
 		eta += t.alpha[j] * math.Cos(jj*xiP) * math.Sinh(jj*etaP)
 	}
 
-	easting = t.FalseE + t.K0*t.bigA*eta
-	northing = t.FalseN + t.K0*t.bigA*xi
+	easting = t.falseE + t.k0*t.bigA*eta
+	northing = t.falseN + t.k0*t.bigA*xi
 	return easting, northing
 }
 
 // Inverse projects (easting, northing) in metres back to geographic (lon, lat)
 // in degrees.
 func (t *TransverseMercator) Inverse(easting, northing float64) (lon, lat float64) {
-	xi := (northing - t.FalseN) / (t.K0 * t.bigA)
-	eta := (easting - t.FalseE) / (t.K0 * t.bigA)
+	xi := (northing - t.falseN) / (t.k0 * t.bigA)
+	eta := (easting - t.falseE) / (t.k0 * t.bigA)
 
 	xiP := xi
 	etaP := eta
@@ -129,6 +131,6 @@ func (t *TransverseMercator) Inverse(easting, northing float64) (lon, lat float6
 	lambda := math.Atan2(math.Sinh(etaP), math.Cos(xiP))
 
 	lat = phi * 180 / math.Pi
-	lon = t.Lon0 + lambda*180/math.Pi
+	lon = t.lon0 + lambda*180/math.Pi
 	return lon, lat
 }

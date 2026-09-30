@@ -16,5 +16,5 @@ func UTM(zone int, north bool) *TransverseMercator {
 	if !north {
 		falseN = utmFalseNS
 	}
-	return NewTransverseMercator(WGS84, lon0, utmK0, utmFalseE, falseN)
+	return NewTransverseMercator(WGS84(), lon0, utmK0, utmFalseE, falseN)
 }
