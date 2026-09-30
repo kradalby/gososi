@@ -1,6 +1,7 @@
 package sosi
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -95,5 +96,117 @@ func TestWriterMissingObjectType(t *testing.T) {
 	_, err := GeoJSONToSOSI([]byte(twoPointLine), map[string]string{})
 	if err == nil {
 		t.Fatal("expected error for missing object type")
+	}
+}
+
+// pointWith converts a single Point feature carrying id and properties.
+func pointWith(id, props, objType string, opts ...Option) (string, error) {
+	in := `{"type":"FeatureCollection","features":[{"type":"Feature","id":` + id +
+		`,"geometry":{"type":"Point","coordinates":[10.7,59.9]},"properties":` + props + `}]}`
+	out, err := GeoJSONToSOSI([]byte(in), map[string]string{"a": objType}, opts...)
+	return string(out), err
+}
+
+func TestWriterAttributeValues(t *testing.T) {
+	tests := []struct {
+		name  string
+		props string
+		want  string
+	}{
+		{"plain token", `{"k":"planned"}`, "..k planned\n"},
+		{"space", `{"k":"hello world"}`, "..k \"hello world\"\n"},
+		{"double quote", `{"k":"say \"hi\""}`, "..k 'say \"hi\"'\n"},
+		{"single quote", `{"k":"it's"}`, "..k \"it's\"\n"},
+		{"empty", `{"k":""}`, "..k \"\"\n"},
+		{"leading dot", `{"k":".SLUTT"}`, "..k \".SLUTT\"\n"},
+		{"comment marker", `{"k":"a!b"}`, "..k \"a!b\"\n"},
+		{"colon", `{"k":":5"}`, "..k \":5\"\n"},
+		{"integer", `{"k":40}`, "..k 40\n"},
+		{"fraction", `{"k":0.5}`, "..k 0.5\n"},
+		{"beyond int64", `{"k":1e21}`, "..k 1000000000000000000000\n"},
+		{"bool", `{"k":true}`, "..k true\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := pointWith(`"a"`, tt.props, "Kum")
+			if err != nil {
+				t.Fatalf("GeoJSONToSOSI: %v", err)
+			}
+			if !strings.Contains(out, tt.want) {
+				t.Errorf("output missing %q\n---\n%s", tt.want, out)
+			}
+		})
+	}
+}
+
+func TestWriterOmitsNullAndGeometryAttributes(t *testing.T) {
+	out, err := pointWith(`"a"`, `{"gone":null,"NØH":"1 2 3","NØ":"1 2","REF":":1","OBJTYPE":"X"}`, "Kum")
+	if err != nil {
+		t.Fatalf("GeoJSONToSOSI: %v", err)
+	}
+	for _, unwanted := range []string{"..gone", "..NØ ", "..NØH ", "..REF", "..OBJTYPE X"} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("output should not contain %q\n---\n%s", unwanted, out)
+		}
+	}
+	if n := strings.Count(out, "..NØH"); n != 1 {
+		t.Errorf("want one ..NØH block, got %d\n---\n%s", n, out)
+	}
+}
+
+func TestWriterRejectsUnrepresentable(t *testing.T) {
+	tests := []struct {
+		name    string
+		id      string // JSON; also the objectTypes key
+		props   string
+		objType string
+		opts    []Option
+	}{
+		{"newline in value", `"a"`, `{"k":"hi\n.SLUTT\n.PUNKT 99:"}`, "Kum", nil},
+		{"carriage return in value", `"a"`, `{"k":"a\rb"}`, "Kum", nil},
+		{"tab in value", `"a"`, `{"k":"a\tb"}`, "Kum", nil},
+		{"both quote kinds", `"a"`, `{"k":"'\""}`, "Kum", nil},
+		{"nested object", `"a"`, `{"k":{"x":1}}`, "Kum", nil},
+		{"array", `"a"`, `{"k":[1,2]}`, "Kum", nil},
+		{"newline in key", `"a"`, `{"a\n.SLUTT":1}`, "Kum", nil},
+		{"space in key", `"a"`, `{"a b":1}`, "Kum", nil},
+		{"leading dot in key", `"a"`, `{".k":1}`, "Kum", nil},
+		{"empty key", `"a"`, `{"":1}`, "Kum", nil},
+		{"newline in id", `"a\n.SLUTT"`, `{}`, "Kum", nil},
+		{"newline in objtype", `"a"`, `{}`, "Kum\n.SLUTT", nil},
+		{"space in objtype", `"a"`, `{}`, "Kum Evil", nil},
+		{"empty objtype", `"a"`, `{}`, "", nil},
+		{"newline in producer", `"a"`, `{}`, "Kum", []Option{WithProducer("x\n.SLUTT")}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var key string
+			if err := json.Unmarshal([]byte(tt.id), &key); err != nil {
+				t.Fatal(err)
+			}
+			in := `{"type":"FeatureCollection","features":[{"type":"Feature","id":` + tt.id +
+				`,"geometry":{"type":"Point","coordinates":[10.7,59.9]},"properties":` + tt.props + `}]}`
+			out, err := GeoJSONToSOSI([]byte(in), map[string]string{key: tt.objType}, tt.opts...)
+			if err == nil {
+				t.Fatalf("want error, got output\n---\n%s", out)
+			}
+		})
+	}
+}
+
+func TestWriterAttributesRoundTrip(t *testing.T) {
+	out, err := pointWith(`"a"`, `{"note":"x .SLUTT .PUNKT 99"}`, "Kum")
+	if err != nil {
+		t.Fatalf("GeoJSONToSOSI: %v", err)
+	}
+	doc, err := NewParser().Parse(strings.NewReader(out))
+	if err != nil {
+		t.Fatalf("Parse: %v\n---\n%s", err, out)
+	}
+	if len(doc.Features) != 1 {
+		t.Fatalf("want 1 feature, got %d\n---\n%s", len(doc.Features), out)
+	}
+	if got := doc.Features[0].Properties["note"]; got != "x .SLUTT .PUNKT 99" {
+		t.Errorf("note = %q\n---\n%s", got, out)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/kradalby/gososi/geojson"
 	"github.com/kradalby/gososi/proj"
@@ -20,6 +21,10 @@ import (
 //
 // objectTypes maps each feature (by its GeoJSON id, or "c<index>" when it has
 // none) to a SOSI object type emitted as OBJTYPE.
+//
+// Property values must be strings, numbers or booleans; null properties are
+// omitted. SOSI text has no escapes, so a nested value, a control character or
+// a name that is not a single token is an error rather than corrupt output.
 func GeoJSONToSOSI(data []byte, objectTypes map[string]string, opts ...Option) ([]byte, error) {
 	o := defaultWriteOptions()
 	for _, opt := range opts {
@@ -45,9 +50,13 @@ func GeoJSONToSOSI(data []byte, objectTypes map[string]string, opts ...Option) (
 	}
 
 	var b strings.Builder
-	writeHeader(&b, o, koordsys, bbox)
+	if err := writeHeader(&b, o, koordsys, bbox); err != nil {
+		return nil, err
+	}
 	for _, f := range features {
-		writeFeature(&b, f, o)
+		if err := writeFeature(&b, f, o); err != nil {
+			return nil, fmt.Errorf("feature %s: %w", f.key, err)
+		}
 	}
 	b.WriteString(".SLUTT\n")
 
@@ -57,9 +66,10 @@ func GeoJSONToSOSI(data []byte, objectTypes map[string]string, opts ...Option) (
 // outFeature is a feature ready to serialise.
 type outFeature struct {
 	seq        int
+	key        string // objectTypes key, for errors
 	sosiType   string
 	objType    string
-	idString   string
+	id         any
 	properties map[string]any
 	coords     []Coordinate
 }
@@ -131,13 +141,9 @@ func buildFeatures(fc *geojson.FeatureCollection, objectTypes map[string]string,
 			return nil, bbox, fmt.Errorf("feature %d has no geometry", i)
 		}
 
-		idString := ""
 		featureKey := fmt.Sprintf("c%d", i)
-		if f.ID != nil {
-			idString = featureIDString(f.ID)
-			if s, ok := f.ID.(string); ok {
-				featureKey = s
-			}
+		if s, ok := f.ID.(string); ok {
+			featureKey = s
 		}
 
 		objType, ok := objectTypes[featureKey]
@@ -166,9 +172,10 @@ func buildFeatures(fc *geojson.FeatureCollection, objectTypes map[string]string,
 
 		out = append(out, outFeature{
 			seq:        i + 1,
+			key:        featureKey,
 			sosiType:   sosiType,
 			objType:    objType,
-			idString:   idString,
+			id:         f.ID,
 			properties: f.Properties,
 			coords:     coords,
 		})
@@ -194,13 +201,17 @@ func dropConsecutiveDuplicates(coords []Coordinate) []Coordinate {
 	return out
 }
 
-func writeHeader(b *strings.Builder, o writeOptions, koordsys KoordSys, bbox BoundingBox) {
+func writeHeader(b *strings.Builder, o writeOptions, koordsys KoordSys, bbox BoundingBox) error {
 	b.WriteString(".HODE\n")
 	b.WriteString("..TEGNSETT UTF-8\n")
 	fmt.Fprintf(b, "..SOSI-VERSJON %s\n", o.version)
 	fmt.Fprintf(b, "..SOSI-NIVÅ %d\n", o.level)
 	if o.producer != "" {
-		fmt.Fprintf(b, "..PRODUSENT %q\n", o.producer)
+		producer, err := quoteText(o.producer)
+		if err != nil {
+			return fmt.Errorf("PRODUSENT: %w", err)
+		}
+		fmt.Fprintf(b, "..PRODUSENT %s\n", producer)
 	}
 
 	b.WriteString("..TRANSPAR\n")
@@ -217,19 +228,31 @@ func writeHeader(b *strings.Builder, o writeOptions, koordsys KoordSys, bbox Bou
 	b.WriteString("..OMRÅDE\n")
 	fmt.Fprintf(b, "...MIN-NØ %d %d\n", int(math.Floor(bbox.MinLat)), int(math.Floor(bbox.MinLon)))
 	fmt.Fprintf(b, "...MAX-NØ %d %d\n", int(math.Ceil(bbox.MaxLat)), int(math.Ceil(bbox.MaxLon)))
+	return nil
 }
 
-func writeFeature(b *strings.Builder, f outFeature, o writeOptions) {
+func writeFeature(b *strings.Builder, f outFeature, o writeOptions) error {
+	if !isPlainToken(f.objType) {
+		return fmt.Errorf("OBJTYPE %q is not a SOSI name", f.objType)
+	}
 	fmt.Fprintf(b, ".%s %d:\n", f.sosiType, f.seq)
 	fmt.Fprintf(b, "..OBJTYPE %s\n", f.objType)
 
 	if o.attributes {
-		for _, kv := range attributeLines(f.properties) {
+		lines, err := attributeLines(f.properties)
+		if err != nil {
+			return err
+		}
+		for _, kv := range lines {
 			fmt.Fprintf(b, "..%s %s\n", kv[0], kv[1])
 		}
 	}
-	if o.featureID && f.idString != "" {
-		fmt.Fprintf(b, "..id %s\n", f.idString)
+	if o.featureID && f.id != nil && f.id != "" {
+		id, err := formatAttrValue(f.id)
+		if err != nil {
+			return fmt.Errorf("id: %w", err)
+		}
+		fmt.Fprintf(b, "..id %s\n", id)
 	}
 
 	b.WriteString("..NØH\n")
@@ -241,17 +264,25 @@ func writeFeature(b *strings.Builder, f outFeature, o writeOptions) {
 			FormatCoordinateToSOSI(c.Z, o.altAcc),
 		)
 	}
+	return nil
 }
 
-// attributeLines returns [key, value] pairs for every scalar property except
-// objtype (which becomes OBJTYPE), in deterministic key order.
-func attributeLines(props map[string]any) [][2]string {
-	if len(props) == 0 {
-		return nil
-	}
+// derivedElements are written from the feature's geometry and object type; a
+// property of the same name would forge them.
+var derivedElements = map[string]bool{
+	"objtype": true,
+	"OBJTYPE": true,
+	"NØ":      true,
+	"NØH":     true,
+	"REF":     true,
+}
+
+// attributeLines returns [key, value] pairs for every property except the
+// derived elements and nulls, in deterministic key order.
+func attributeLines(props map[string]any) ([][2]string, error) {
 	keys := make([]string, 0, len(props))
-	for k := range props {
-		if k == "objtype" {
+	for k, v := range props {
+		if derivedElements[k] || v == nil {
 			continue
 		}
 		keys = append(keys, k)
@@ -260,9 +291,16 @@ func attributeLines(props map[string]any) [][2]string {
 
 	lines := make([][2]string, 0, len(keys))
 	for _, k := range keys {
-		lines = append(lines, [2]string{k, formatAttrValue(props[k])})
+		if !isPlainToken(k) {
+			return nil, fmt.Errorf("property %q is not a SOSI name", k)
+		}
+		v, err := formatAttrValue(props[k])
+		if err != nil {
+			return nil, fmt.Errorf("property %q: %w", k, err)
+		}
+		lines = append(lines, [2]string{k, v})
 	}
-	return lines
+	return lines, nil
 }
 
 // formatEnhet formats a coordinate unit (10^-accuracy) with enough decimals to
@@ -272,36 +310,52 @@ func formatEnhet(accuracy int) string {
 	return strconv.FormatFloat(math.Pow(10, -float64(accuracy)), 'f', decimals, 64)
 }
 
-func formatAttrValue(v any) string {
+func formatAttrValue(v any) (string, error) {
 	switch x := v.(type) {
 	case string:
-		return x
+		return formatText(x)
 	case float64:
-		if x == math.Trunc(x) && !math.IsInf(x, 0) {
-			return strconv.FormatInt(int64(x), 10)
-		}
-		return strconv.FormatFloat(x, 'g', -1, 64)
+		// 'f' keeps integral values integral without an int64 overflow.
+		return strconv.FormatFloat(x, 'f', -1, 64), nil
 	case int:
-		return strconv.Itoa(x)
+		return strconv.Itoa(x), nil
 	case int64:
-		return strconv.FormatInt(x, 10)
+		return strconv.FormatInt(x, 10), nil
 	case bool:
-		return strconv.FormatBool(x)
+		return strconv.FormatBool(x), nil
 	default:
-		return fmt.Sprintf("%v", v)
+		return "", fmt.Errorf("unsupported value type %T", v)
 	}
 }
 
-func featureIDString(id any) string {
-	switch x := id.(type) {
-	case string:
-		return x
-	case float64:
-		if x == math.Trunc(x) && !math.IsInf(x, 0) {
-			return strconv.FormatInt(int64(x), 10)
-		}
-		return strconv.FormatFloat(x, 'g', -1, 64)
-	default:
-		return fmt.Sprintf("%v", id)
+// formatText writes s bare when it is a plain token and quoted otherwise.
+func formatText(s string) (string, error) {
+	if isPlainToken(s) {
+		return s, nil
 	}
+	return quoteText(s)
+}
+
+// quoteText quotes s. SOSI text has no escapes: quoting with the other kind
+// is the only way to carry a quote, and a line break would end the element.
+func quoteText(s string) (string, error) {
+	if strings.ContainsFunc(s, unicode.IsControl) {
+		return "", fmt.Errorf("text %q has control characters, which SOSI cannot represent", s)
+	}
+	switch {
+	case !strings.Contains(s, `"`):
+		return `"` + s + `"`, nil
+	case !strings.Contains(s, "'"):
+		return "'" + s + "'", nil
+	default:
+		return "", fmt.Errorf("text %q has both quote characters, which SOSI cannot represent", s)
+	}
+}
+
+// isPlainToken reports whether s is a single token no reader mistakes for an
+// element (leading dot), a reference (colon), a comment (!) or quoted text.
+func isPlainToken(s string) bool {
+	return s != "" && !strings.HasPrefix(s, ".") && !strings.ContainsFunc(s, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r) || strings.ContainsRune(`"'!:`, r)
+	})
 }
