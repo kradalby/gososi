@@ -229,48 +229,51 @@ func convertSOSIFeatureWithReferences(feature *SOSIFeature, header *SOSIHeader, 
 
 // convertPolygonWithReferences converts FLATE with reference resolution.
 func convertPolygonWithReferences(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (geojson.Geometry, error) {
+	r := refResolver{features: featureMap, resolving: make(map[int]bool)}
+	return r.polygon(feature)
+}
+
+// refResolver expands FLATE references. A FLATE may reference another FLATE,
+// so resolving tracks the FLATE IDs on the current expansion path: revisiting
+// one means the input references itself, which would otherwise recurse forever.
+type refResolver struct {
+	features  map[int]*SOSIFeature
+	resolving map[int]bool
+}
+
+func (r refResolver) polygon(feature *SOSIFeature) (geojson.Polygon, error) {
+	if r.resolving[feature.ID] {
+		return nil, fmt.Errorf("reference cycle through FLATE %d", feature.ID)
+	}
+	r.resolving[feature.ID] = true
+	defer delete(r.resolving, feature.ID)
+
 	// Simple polygon case
 	if len(feature.Coordinates) > 0 && len(feature.Refs) == 0 {
 		return convertSimplePolygon(feature.Coordinates), nil
 	}
 
-	// Polygon with references
-	if len(feature.Refs) > 0 {
-		return buildPolygonFromReferences(feature, featureMap)
-	}
-
-	return nil, fmt.Errorf("polygon feature has no coordinates or references")
-}
-
-// buildPolygonFromReferences constructs polygon from referenced KURVE features.
-func buildPolygonFromReferences(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (geojson.Polygon, error) {
-	// Handle polygon with holes structure
-	if len(feature.OuterRing) > 0 {
-		return buildPolygonWithHoles(feature, featureMap)
+	if len(feature.Refs) == 0 {
+		return nil, fmt.Errorf("polygon feature has no coordinates or references")
 	}
 
 	// Simple polygon from references
-	ring, err := buildRingFromReferences(feature.Refs, featureMap)
-	if err != nil {
-		return nil, fmt.Errorf("building outer ring: %w", err)
+	if len(feature.OuterRing) == 0 {
+		ring, err := r.ring(feature.Refs)
+		if err != nil {
+			return nil, fmt.Errorf("building outer ring: %w", err)
+		}
+		return geojson.Polygon{ring}, nil
 	}
 
-	return geojson.Polygon{ring}, nil
-}
-
-// buildPolygonWithHoles constructs polygon with holes from references.
-func buildPolygonWithHoles(feature *SOSIFeature, featureMap map[int]*SOSIFeature) (geojson.Polygon, error) {
-	// Build outer ring
-	outerRing, err := buildRingFromReferences(feature.OuterRing, featureMap)
+	outerRing, err := r.ring(feature.OuterRing)
 	if err != nil {
 		return nil, fmt.Errorf("building outer ring: %w", err)
 	}
 
 	polygon := geojson.Polygon{outerRing}
-
-	// Build holes
 	for i, holeRefs := range feature.Holes {
-		hole, err := buildRingFromReferences(holeRefs, featureMap)
+		hole, err := r.ring(holeRefs)
 		if err != nil {
 			return nil, fmt.Errorf("building hole %d: %w", i, err)
 		}
@@ -280,19 +283,18 @@ func buildPolygonWithHoles(feature *SOSIFeature, featureMap map[int]*SOSIFeature
 	return polygon, nil
 }
 
-// buildRingFromReferences constructs a ring from referenced KURVE features.
-func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (geojson.Ring, error) {
+// ring constructs a ring from referenced KURVE or FLATE features.
+func (r refResolver) ring(refs []int) (geojson.Ring, error) {
 	ring := geojson.Ring{}
 
 	for _, refID := range refs {
-		// Handle negative references by taking absolute value
-		// Negative references in SOSI indicate reverse direction or special handling
+		// Negative references in SOSI indicate reverse direction
 		absRefID := refID
 		if refID < 0 {
 			absRefID = -refID
 		}
 
-		refFeature, exists := featureMap[absRefID]
+		refFeature, exists := r.features[absRefID]
 		if !exists {
 			// Return error for missing references - this indicates data integrity issues
 			return nil, fmt.Errorf("referenced feature %d not found - this may indicate incomplete or corrupted SOSI data", absRefID)
@@ -300,38 +302,30 @@ func buildRingFromReferences(refs []int, featureMap map[int]*SOSIFeature) (geojs
 
 		switch refFeature.Type {
 		case "KURVE":
-			// Add coordinates from referenced KURVE
-			// If reference was negative, reverse the coordinate order
 			coords := refFeature.Coordinates
 			if refID < 0 {
-				// Reverse coordinate order for negative references
 				for _, coord := range slices.Backward(coords) {
 					ring = append(ring, geojson.Point{Lon: coord.X, Lat: coord.Y, Depth: coord.Z})
 				}
 			} else {
-				// Normal order for positive references
 				for _, coord := range coords {
 					ring = append(ring, geojson.Point{Lon: coord.X, Lat: coord.Y, Depth: coord.Z})
 				}
 			}
 		case "FLATE":
-			// Handle FLATE references - use the outer ring of the referenced polygon
-			// This is for cases where a polygon hole is defined by another polygon
-			polygonGeometry, err := convertPolygonWithReferences(refFeature, featureMap)
+			// A hole may be defined by another polygon; use its outer ring.
+			polygon, err := r.polygon(refFeature)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert referenced FLATE %d: %w", refID, err)
 			}
 
-			// Get the outer ring (first ring) of the referenced polygon
-			if polygon, ok := polygonGeometry.(geojson.Polygon); ok && len(polygon) > 0 {
+			if len(polygon) > 0 {
 				outerRing := polygon[0]
 				if refID < 0 {
-					// Reverse ring direction for negative references
 					for _, pt := range slices.Backward(outerRing) {
 						ring = append(ring, pt)
 					}
 				} else {
-					// Normal ring direction for positive references
 					ring = append(ring, outerRing...)
 				}
 			}
