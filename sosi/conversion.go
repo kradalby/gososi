@@ -52,8 +52,11 @@ func AnalyzeGeoJSON(geojsonData []byte) (map[string]string, error) {
 			}
 		}
 
-		// Get geometry type
-		geomType := string(feature.Geometry.GeoJSONType())
+		// A null geometry is valid GeoJSON: an unlocated feature.
+		geomType := "null"
+		if feature.Geometry != nil {
+			geomType = string(feature.Geometry.GeoJSONType())
+		}
 
 		// Get label from properties
 		label := "unlabeled"
