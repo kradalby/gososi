@@ -165,7 +165,7 @@ func TestPolygonGeometry(t *testing.T) {
 			}
 
 			// Test center point coordinates
-			if len(polygonFeature.Coordinates) > 0 {
+			if len(polygonFeature.Coordinates) == 1 {
 				center := polygonFeature.Coordinates[0]
 				tolerance := 0.01
 
@@ -177,7 +177,7 @@ func TestPolygonGeometry(t *testing.T) {
 					t.Errorf("Center Y = %f, want %f", center.Y, tt.wantCenterY)
 				}
 			} else {
-				t.Error("Polygon has no center coordinate")
+				t.Errorf("want exactly one center coordinate, got %v", polygonFeature.Coordinates)
 			}
 		})
 	}
@@ -416,7 +416,7 @@ func TestPolygonFromFile(t *testing.T) {
 	expectedCenterX := 341822.16
 	expectedCenterY := 7661351.84
 
-	if len(polygonFeature.Coordinates) > 0 {
+	if len(polygonFeature.Coordinates) == 1 {
 		center := polygonFeature.Coordinates[0]
 		tolerance := 0.01
 
@@ -428,6 +428,6 @@ func TestPolygonFromFile(t *testing.T) {
 			t.Errorf("Center Y = %f, want %f (from JavaScript test)", center.Y, expectedCenterY)
 		}
 	} else {
-		t.Error("No center coordinates found")
+		t.Errorf("want exactly one center coordinate, got %v", polygonFeature.Coordinates)
 	}
 }

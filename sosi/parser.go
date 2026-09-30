@@ -654,144 +654,141 @@ func (p *Parser) parseFeature(key string, lines []string, header SOSIHeader) (SO
 		return SOSIFeature{}, fmt.Errorf("invalid feature ID in key %s: %w", key, err)
 	}
 
-	feature := SOSIFeature{
-		ID:         id,
-		Type:       geometryType,
-		Properties: make(map[string]any),
-		Refs:       []int{},
-	}
-
 	// Skip first line as it's already processed in the key
 	if len(lines) <= 1 {
-		return feature, fmt.Errorf("feature has no data lines beyond header")
+		return SOSIFeature{}, fmt.Errorf("feature has no data lines beyond header")
 	}
 	featureLines := lines[1:]
 
 	// Parse feature data using level 2 parsing
 	featureData, err := p.parseFromLevel2(featureLines)
 	if err != nil {
-		return feature, fmt.Errorf("failed to parse feature data: %w", err)
+		return SOSIFeature{}, fmt.Errorf("failed to parse feature data: %w", err)
 	}
 
-	// Extract common properties
+	var objectType string
 	if objType, ok := featureData["OBJTYPE"]; ok {
-		feature.ObjectType = fmt.Sprintf("%v", objType)
+		objectType = fmt.Sprintf("%v", objType)
 	}
 
-	// Store all properties
-	feature.Properties = featureData
-
-	// Parse coordinates based on geometry type
-	if err := p.parseGeometry(&feature, featureData, header); err != nil {
-		return feature, fmt.Errorf("failed to parse geometry: %w", err)
+	geom, err := p.parseGeometry(geometryType, featureData, header)
+	if err != nil {
+		return SOSIFeature{}, fmt.Errorf("failed to parse geometry: %w", err)
 	}
 
-	return feature, nil
+	return SOSIFeature{
+		ID:          id,
+		Type:        geometryType,
+		ObjectType:  objectType,
+		Coordinates: geom.coords,
+		Properties:  featureData,
+		Refs:        geom.refs,
+		OuterRing:   geom.outerRing,
+		Holes:       geom.holes,
+	}, nil
+}
+
+// geometry is the shape parsed from a feature's coordinate and REF keys.
+type geometry struct {
+	coords    []Coordinate
+	refs      []int
+	outerRing []int
+	holes     [][]int
 }
 
 // parseGeometry parses geometry data for a feature
-func (p *Parser) parseGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
-	switch feature.Type {
-	case "PUNKT":
-		return p.parsePointGeometry(feature, data, header)
-	case "KURVE":
-		return p.parseLineStringGeometry(feature, data, header)
-	case "FLATE":
-		return p.parsePolygonGeometry(feature, data, header)
-	case "BUEP":
-		return p.parseArcGeometry(feature, data, header)
-	case "TEKST":
+func (p *Parser) parseGeometry(geometryType string, data map[string]any, header SOSIHeader) (geometry, error) {
+	var (
+		coords []Coordinate
+		err    error
+	)
+	switch geometryType {
+	case "PUNKT", "TEKST":
 		// TEKST is treated as a point with additional text attributes
-		return p.parsePointGeometry(feature, data, header)
+		coords, err = p.parsePointGeometry(data, header)
+	case "KURVE":
+		coords, err = p.parseLineStringGeometry(data, header)
+	case "FLATE":
+		return p.parsePolygonGeometry(data, header)
+	case "BUEP":
+		coords, err = p.parseArcGeometry(data, header)
 	default:
-		return fmt.Errorf("unsupported geometry type: %s", feature.Type)
+		return geometry{}, fmt.Errorf("unsupported geometry type: %s", geometryType)
 	}
+	if err != nil {
+		return geometry{}, err
+	}
+	return geometry{coords: coords}, nil
+}
+
+// coordLines returns the coordinate lines stored under a NØ/NØH key: the
+// level-2 parse keeps one line as a string and several as []any.
+func coordLines(value any) []string {
+	switch v := value.(type) {
+	case string:
+		return []string{v}
+	case []any:
+		lines := make([]string, 0, len(v))
+		for _, line := range v {
+			if s, ok := line.(string); ok {
+				lines = append(lines, s)
+			}
+		}
+		return lines
+	}
+	return nil
+}
+
+// parseCoordinates parses every line, labelling errors with what.
+func (p *Parser) parseCoordinates(lines []string, header SOSIHeader, what string) ([]Coordinate, error) {
+	coords := make([]Coordinate, 0, len(lines))
+	for _, line := range lines {
+		coord, err := p.parseCoordinate(line, header)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse %s coordinate: %w", what, err)
+		}
+		coords = append(coords, coord)
+	}
+	return coords, nil
 }
 
 // parsePointGeometry parses PUNKT (Point) geometry
-func (p *Parser) parsePointGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
-	// Look for NØ or NØH (coordinates)
-	coordKeys := []string{"NØ", "NØH"}
-
-	for _, key := range coordKeys {
-		if coordData, ok := data[key]; ok {
-			switch coords := coordData.(type) {
-			case string:
-				coord, err := p.parseCoordinate(coords, header)
-				if err != nil {
-					return fmt.Errorf("failed to parse point coordinate: %w", err)
-				}
-				feature.Coordinates = []Coordinate{coord}
-				return nil
-			case []any:
-				// Handle multiple coordinate lines
-				if len(coords) > 0 {
-					if coordStr, ok := coords[0].(string); ok {
-						coord, err := p.parseCoordinate(coordStr, header)
-						if err != nil {
-							return fmt.Errorf("failed to parse point coordinate: %w", err)
-						}
-						feature.Coordinates = []Coordinate{coord}
-						return nil
-					}
-				}
-			}
+func (p *Parser) parsePointGeometry(data map[string]any, header SOSIHeader) ([]Coordinate, error) {
+	for _, key := range []string{"NØ", "NØH"} {
+		if lines := coordLines(data[key]); len(lines) > 0 {
+			return p.parseCoordinates(lines[:1], header, "point")
 		}
 	}
-
-	return nil
+	return nil, nil
 }
 
 // parseLineStringGeometry parses KURVE (LineString) geometry
-func (p *Parser) parseLineStringGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
-	// Look for NØ or NØH (coordinates)
-	coordKeys := []string{"NØ", "NØH"}
-
+func (p *Parser) parseLineStringGeometry(data map[string]any, header SOSIHeader) ([]Coordinate, error) {
 	// Collect coordinates from all available coordinate keys
-	var allCoordinates []Coordinate
-
-	for _, key := range coordKeys {
-		if coordData, ok := data[key]; ok {
-			switch coords := coordData.(type) {
-			case []any:
-				for _, coordInterface := range coords {
-					if coordStr, ok := coordInterface.(string); ok {
-						coord, err := p.parseCoordinate(coordStr, header)
-						if err != nil {
-							return fmt.Errorf("failed to parse linestring coordinate: %w", err)
-						}
-						allCoordinates = append(allCoordinates, coord)
-					}
-				}
-			case string:
-				coord, err := p.parseCoordinate(coords, header)
-				if err != nil {
-					return fmt.Errorf("failed to parse linestring coordinate: %w", err)
-				}
-				allCoordinates = append(allCoordinates, coord)
-			}
+	var coords []Coordinate
+	for _, key := range []string{"NØ", "NØH"} {
+		c, err := p.parseCoordinates(coordLines(data[key]), header, "linestring")
+		if err != nil {
+			return nil, err
 		}
+		coords = append(coords, c...)
 	}
-
-	// Set all collected coordinates
-	feature.Coordinates = allCoordinates
-
-	return nil
+	return coords, nil
 }
 
-// parsePolygonGeometry parses FLATE (Polygon) geometry
-func (p *Parser) parsePolygonGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
-	// FLATE geometries are defined by references to other features (REF)
+// parsePolygonGeometry parses FLATE (Polygon) geometry: REF lines, plus either
+// a centre point or, for simple polygons, the ring itself under NØ or NØH.
+func (p *Parser) parsePolygonGeometry(data map[string]any, header SOSIHeader) (geometry, error) {
+	var geom geometry
+
 	// REF can be a single string or array of strings (multi-line REF)
 	if refData, ok := data["REF"]; ok {
 		var allRefStrings []string
 
 		switch refs := refData.(type) {
 		case string:
-			// Single REF line
 			allRefStrings = []string{refs}
 		case []any:
-			// Multiple REF lines
 			for _, ref := range refs {
 				if refStr, ok := ref.(string); ok {
 					allRefStrings = append(allRefStrings, refStr)
@@ -799,109 +796,49 @@ func (p *Parser) parsePolygonGeometry(feature *SOSIFeature, data map[string]any,
 			}
 		}
 
-		// Parse all reference strings with hole support
-		var allOuterRefs []int
-		var allHoles [][]int
-		var allRefs []int
-
 		for _, refStr := range allRefStrings {
 			outerRing, holes, refs, err := p.parsePolygonReferencesWithHoles(refStr)
 			if err != nil {
-				return fmt.Errorf("failed to parse polygon references: %w", err)
+				return geometry{}, fmt.Errorf("failed to parse polygon references: %w", err)
 			}
-
-			// Accumulate outer ring references
-			allOuterRefs = append(allOuterRefs, outerRing...)
-
-			// Accumulate hole references
-			allHoles = append(allHoles, holes...)
-
-			// Accumulate all references for backward compatibility
-			allRefs = append(allRefs, refs...)
+			geom.outerRing = append(geom.outerRing, outerRing...)
+			geom.holes = append(geom.holes, holes...)
+			// All references flattened, for backward compatibility
+			geom.refs = append(geom.refs, refs...)
 		}
-
-		// Set both new structure and backward compatibility
-		feature.OuterRing = allOuterRefs
-		feature.Holes = allHoles
-		feature.Refs = allRefs
 	}
 
-	// Also parse center point if present (NØH)
-	if coordData, ok := data["NØH"]; ok {
-		if coordStr, ok := coordData.(string); ok {
-			coord, err := p.parseCoordinate(coordStr, header)
+	// Only the first coordinate key present is used
+	for _, key := range []string{"NØ", "NØH"} {
+		if lines := coordLines(data[key]); len(lines) > 0 {
+			coords, err := p.parseCoordinates(lines, header, "polygon")
 			if err != nil {
-				return fmt.Errorf("failed to parse polygon center: %w", err)
+				return geometry{}, err
 			}
-			feature.Coordinates = []Coordinate{coord}
+			geom.coords = coords
+			break
 		}
 	}
 
-	// Parse direct polygon coordinates if present (NØ)
-	// This handles simple polygons defined by coordinate list instead of references
-	coordKeys := []string{"NØ", "NØH"}
-	for _, key := range coordKeys {
-		if coordData, ok := data[key]; ok {
-			switch coords := coordData.(type) {
-			case []any:
-				// Multiple coordinate lines
-				for _, coordInterface := range coords {
-					if coordStr, ok := coordInterface.(string); ok {
-						coord, err := p.parseCoordinate(coordStr, header)
-						if err != nil {
-							return fmt.Errorf("failed to parse polygon coordinate: %w", err)
-						}
-						feature.Coordinates = append(feature.Coordinates, coord)
-					}
-				}
-			case string:
-				// Single coordinate line
-				coord, err := p.parseCoordinate(coords, header)
-				if err != nil {
-					return fmt.Errorf("failed to parse polygon coordinate: %w", err)
-				}
-				feature.Coordinates = append(feature.Coordinates, coord)
-			}
-			break // Only process the first matching coordinate key
-		}
-	}
-
-	return nil
+	return geom, nil
 }
 
 // parseArcGeometry parses BUEP (Arc) geometry
-func (p *Parser) parseArcGeometry(feature *SOSIFeature, data map[string]any, header SOSIHeader) error {
+func (p *Parser) parseArcGeometry(data map[string]any, header SOSIHeader) ([]Coordinate, error) {
 	// BUEP requires 3 points to define the arc
-	// Look for NØ or NØH (coordinates)
-	coordKeys := []string{"NØ", "NØH"}
-
-	for _, key := range coordKeys {
-		if coordData, ok := data[key]; ok {
-			switch coords := coordData.(type) {
-			case []any:
-				// BUEP must have exactly 3 coordinate points
-				if len(coords) != 3 {
-					return fmt.Errorf("BUEP requires exactly 3 points, got %d", len(coords))
-				}
-
-				for _, coordInterface := range coords {
-					if coordStr, ok := coordInterface.(string); ok {
-						coord, err := p.parseCoordinate(coordStr, header)
-						if err != nil {
-							return fmt.Errorf("failed to parse arc coordinate: %w", err)
-						}
-						feature.Coordinates = append(feature.Coordinates, coord)
-					}
-				}
-				return nil
-			case string:
-				// Single coordinate string (shouldn't happen for BUEP, but handle gracefully)
-				return fmt.Errorf("BUEP requires 3 coordinate points, got single coordinate")
+	for _, key := range []string{"NØ", "NØH"} {
+		switch coords := data[key].(type) {
+		case []any:
+			if len(coords) != 3 {
+				return nil, fmt.Errorf("BUEP requires exactly 3 points, got %d", len(coords))
 			}
+			return p.parseCoordinates(coordLines(coords), header, "arc")
+		case string:
+			return nil, fmt.Errorf("BUEP requires 3 coordinate points, got single coordinate")
 		}
 	}
 
-	return fmt.Errorf("no coordinates found for BUEP geometry")
+	return nil, fmt.Errorf("no coordinates found for BUEP geometry")
 }
 
 // parseCoordinate parses a coordinate string in SOSI format
