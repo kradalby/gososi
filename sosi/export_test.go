@@ -368,3 +368,38 @@ func TestGeometryCoordinateMapping(t *testing.T) {
 
 	t.Logf("Coordinates correctly mapped: [%f, %f]", point.Lon, point.Lat)
 }
+
+func TestToGeoJSONWithReferencesCycle(t *testing.T) {
+	const header = ".HODE\n..TRANSPAR\n...KOORDSYS 22\n...ORIGO-NØ 0 0\n...ENHET 0.01\n"
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "self reference",
+			body: ".FLATE 1:\n..REF :1\n..NØ\n100 200\n",
+		},
+		{
+			name: "self reference as hole",
+			body: ".KURVE 10:\n..NØ\n0 0\n0 10\n10 10\n0 0\n" +
+				".FLATE 1:\n..REF :10 (:1)\n..NØ\n1 1\n",
+		},
+		{
+			name: "mutual",
+			body: ".FLATE 1:\n..REF :-2\n..NØ\n1 1\n" +
+				".FLATE 2:\n..REF :1\n..NØ\n2 2\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := NewParser().Parse(strings.NewReader(header + tt.body + ".SLUTT\n"))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			_, err = doc.ToGeoJSONWithReferences()
+			if err == nil || !strings.Contains(err.Error(), "cycle") {
+				t.Fatalf("ToGeoJSONWithReferences error = %v, want reference cycle", err)
+			}
+		})
+	}
+}
