@@ -2,7 +2,6 @@ package sosi
 
 import (
 	"fmt"
-	"maps"
 	"slices"
 
 	"github.com/kradalby/gososi/geojson"
@@ -66,8 +65,8 @@ func convertSOSIFeatureToGeoJSON(feature *SOSIFeature, header *SOSIHeader) (*geo
 	}
 
 	// Add parsed properties from SOSI
-	if feature.Properties != nil {
-		maps.Copy(geoFeature.Properties, feature.Properties)
+	for k, v := range feature.Properties {
+		geoFeature.Properties[k] = cloneValue(v)
 	}
 
 	// Add coordinate system information from header
@@ -212,8 +211,8 @@ func convertSOSIFeatureWithReferences(feature *SOSIFeature, header *SOSIHeader, 
 	}
 
 	// Add parsed properties from SOSI
-	if feature.Properties != nil {
-		maps.Copy(geoFeature.Properties, feature.Properties)
+	for k, v := range feature.Properties {
+		geoFeature.Properties[k] = cloneValue(v)
 	}
 
 	// Add coordinate system information
@@ -336,4 +335,32 @@ func (r refResolver) ring(refs []int) (geojson.Ring, error) {
 
 	// Ring will be auto-closed by geojson.Polygon.MarshalJSON if needed
 	return ring, nil
+}
+
+// cloneValue deep-copies the nested shapes the parser produces (KVALITET and
+// REGISTRERINGSVERSJON maps, repeated values as []any), so the GeoJSON output
+// shares no mutable state with the document.
+func cloneValue(v any) any {
+	switch x := v.(type) {
+	case map[string]any:
+		if x == nil {
+			return x
+		}
+		m := make(map[string]any, len(x))
+		for k, e := range x {
+			m[k] = cloneValue(e)
+		}
+		return m
+	case []any:
+		if x == nil {
+			return x
+		}
+		s := make([]any, len(x))
+		for i, e := range x {
+			s[i] = cloneValue(e)
+		}
+		return s
+	default:
+		return v
+	}
 }

@@ -403,3 +403,54 @@ func TestToGeoJSONWithReferencesCycle(t *testing.T) {
 		})
 	}
 }
+
+func TestToGeoJSONDoesNotAliasDocument(t *testing.T) {
+	const src = `.HODE
+..TRANSPAR
+...KOORDSYS 22
+...ORIGO-NØ 0 0
+...ENHET 0.01
+.PUNKT 1:
+..OBJTYPE Kum
+..KVALITET 82
+..REGISTRERINGSVERSJON "FKB" "4.6"
+..MERKNAD a
+b
+..NØ
+100 200
+.SLUTT
+`
+	exports := map[string]func(*SOSIDocument) (*geojson.FeatureCollection, error){
+		"ToGeoJSON":               (*SOSIDocument).ToGeoJSON,
+		"ToGeoJSONWithReferences": (*SOSIDocument).ToGeoJSONWithReferences,
+	}
+	for name, export := range exports {
+		t.Run(name, func(t *testing.T) {
+			doc, err := NewParser().Parse(strings.NewReader(src))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			want, err := json.Marshal(doc.Features[0].Properties)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			fc, err := export(doc)
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			props := fc.Features[0].Properties
+			props["KVALITET"].(map[string]any)["målemetode"] = -1
+			props["REGISTRERINGSVERSJON"].(map[string]any)["system"] = "mutated"
+			props["MERKNAD"].([]any)[0] = "mutated"
+
+			got, err := json.Marshal(doc.Features[0].Properties)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != string(want) {
+				t.Errorf("mutating GeoJSON output changed the document:\n got %s\nwant %s", got, want)
+			}
+		})
+	}
+}
